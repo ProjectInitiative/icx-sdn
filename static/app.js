@@ -130,10 +130,15 @@ function updateLiveIndicators() {
 
   document.querySelectorAll('.port').forEach(el => {
     const pid = el.dataset.port;
-    const lc = liveClass(pid);
-    if (lc) {
-      el.className = `port ${lc}`;
-      if ((data.interfaces || {})[pid]?.inline_power) el.classList.add('port-poe');
+    const p = (data.interfaces || {})[pid];
+    if (p && p.link === 'Disable') {
+      el.className = 'port port-disable';
+    } else {
+      const lc = liveClass(pid);
+      if (lc) {
+        el.className = `port ${lc}`;
+        if (p?.inline_power) el.classList.add('port-poe');
+      }
     }
   });
 
@@ -294,9 +299,11 @@ function showDetail(portId) {
   }).join('') || '<div style="color:var(--text-dim)">None</div>';
 
   const parsedStats = p.stats || {};
-  const lsOk = ls && ls.oper_status !== undefined;
-  const linkState = lsOk ? (ls.oper_status === 1 ? 'Up' : 'Down') : p.link;
-  const speed = lsOk ? '' : (p.speed || '');
+  const linkState = p.link === 'Disable' ? 'Disable'
+    : ls && ls.oper_status === 1 ? 'Up'
+    : p.link === 'Up' ? 'Up'
+    : 'Down';
+  const speed = p.link === 'Disable' ? '' : (p.speed || '');
   const status = linkState === 'Up' ? 'up' : linkState === 'Disable' ? 'disable' : 'down';
   const poeClass = p.inline_power ? 'poe-on' : 'poe-off';
   const poeText = p.inline_power ? '● On' : '○ Off';
