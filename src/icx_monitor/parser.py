@@ -260,6 +260,7 @@ def parse_chassis(text):
     ps_pattern = re.compile(
         r"Power supply (\d+) \((.*?)\) present, status (\S+)"
     )
+    sensor = ""
     for line in text.split("\n"):
         ls = line.strip()
         m = ps_pattern.search(ls)
@@ -280,7 +281,6 @@ def parse_chassis(text):
             })
             continue
 
-        sensor = ""
         temp_m = re.match(r"Current temperature\s+:\s+([\d.]+) deg-C", ls)
         if temp_m:
             if sensor:

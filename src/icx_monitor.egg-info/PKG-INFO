@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: icx-monitor
+Version: 0.1.0
+Summary: Brocade ICX switch monitor - SSH scraping, SNMP live polling, web UI
+Requires-Python: >=3.11
+Requires-Dist: netmiko>=4.3.0
+Requires-Dist: paramiko
