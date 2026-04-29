@@ -303,7 +303,7 @@ function showDetail(portId) {
     : ls && ls.oper_status === 1 ? 'Up'
     : p.link === 'Up' ? 'Up'
     : 'Down';
-  const speed = p.link === 'Disable' ? '' : (p.speed || '');
+  const speed = p.link === 'Disable' ? '' : (p.speed && p.speed !== 'None' ? p.speed : '');
   const status = linkState === 'Up' ? 'up' : linkState === 'Disable' ? 'disable' : 'down';
   const poeClass = p.inline_power ? 'poe-on' : 'poe-off';
   const poeText = p.inline_power ? '● On' : '○ Off';
