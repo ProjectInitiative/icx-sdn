@@ -1,0 +1,14 @@
+# Runtime data
+/data/
+*.log
+
+# Nix build
+result
+.direnv/
+
+# Legacy
+/_legacy/
+
+# Python
+__pycache__/
+*.pyc

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICX Switch Monitor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="header-left">
+      <span class="logo">🖥</span>
+      <span class="hostname" id="hostname">Switch</span>
+      <span class="model" id="model"></span>
+      <span class="version" id="version"></span>
+    </div>
+    <div class="header-right">
+      <div class="chips" id="system-chips"></div>
+      <button id="btn-ingest" onclick="triggerIngest()">↻ Re-ingest</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="panel-switch">
+      <div class="section-label">10G SFP+ Ports</div>
+      <div class="sfp-row" id="sfp-row"></div>
+
+      <div class="section-label">Back Panel - QSFP+ Stacking / Breakout</div>
+      <div class="qsfp-section" id="qsfp-section"></div>
+
+      <div class="section-label">Gigabit PoE Ports</div>
+      <div class="port-grid" id="port-grid"></div>
+
+      <div class="section-label">Link Aggregation Groups</div>
+      <div class="lag-section" id="lag-section"></div>
+    </div>
+
+    <aside class="panel-detail" id="detail-panel">
+      <div class="detail-empty" id="detail-empty">
+        Click a port to see details
+      </div>
+      <div class="detail-content" id="detail-content" style="display:none"></div>
+    </aside>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

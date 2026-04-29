@@ -1,0 +1,26 @@
+[project]
+name = "icx-monitor"
+version = "0.1.0"
+description = "Brocade ICX switch monitor - SSH scraping, SNMP live polling, web UI"
+requires-python = ">=3.11"
+dependencies = [
+    "netmiko>=4.3.0",
+    "paramiko",
+]
+
+[project.scripts]
+icx-grab = "icx_monitor.grab_info:main"
+icx-parse = "icx_monitor.parser:main"
+icx-ingest = "icx_monitor.ingest:main"
+icx-server = "icx_monitor.server:main"
+icx-live = "icx_monitor.live:main"
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+icx_monitor = []
