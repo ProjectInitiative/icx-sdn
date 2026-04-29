@@ -75,6 +75,12 @@ def snmpget(oid):
 
 
 def _int(v, default=0):
+    if v is None:
+        return default
+    v = str(v)
+    m = __import__("re").search(r"\((-?\d+)\)", v)
+    if m:
+        return int(m.group(1))
     try:
         return int(v)
     except (ValueError, TypeError):
@@ -140,27 +146,13 @@ def poll():
     if t:
         chassis["temperature"] = round(_int(t) / 10, 1)
 
-    f = results.get("fan")
-    if f:
-        val = _int(f, -1)
-        if val >= 0:
-            chassis["fans"] = [
-                {"id": i + 1, "status": "ok" if (val >> i) & 1 else "fail"}
-                for i in range(4)
-            ]
-        else:
-            chassis["fans_raw"] = f
+    _fan_raw = results.get("fan")
+    if _fan_raw is not None:
+        chassis["fans_raw"] = _fan_raw
 
-    p = results.get("psu")
-    if p:
-        val = _int(p, -1)
-        if val >= 0:
-            chassis["power_supplies"] = [
-                {"id": i + 1, "status": "present" if (val >> i) & 1 else "absent"}
-                for i in range(2)
-            ]
-        else:
-            chassis["psu_raw"] = p
+    _psu_raw = results.get("psu")
+    if _psu_raw is not None:
+        chassis["psu_raw"] = _psu_raw
 
     return {
         "timestamp": time.time(),

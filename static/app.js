@@ -1,10 +1,31 @@
 let data = null;
+let liveData = null;
+let selectedPort = null;
+let liveInterval = null;
 
 async function fetchData() {
   const r = await fetch('/api/data');
   data = await r.json();
   if (data.error) { showToast('No data yet. Run ingest first.'); return; }
   renderAll();
+  startLivePolling();
+}
+
+async function fetchLive() {
+  try {
+    const r = await fetch('/api/live');
+    liveData = await r.json();
+    if (liveData.error) return;
+    updateLiveIndicators();
+  } catch (e) {
+    console.error('live fetch failed', e);
+  }
+}
+
+function startLivePolling() {
+  fetchLive();
+  if (liveInterval) clearInterval(liveInterval);
+  liveInterval = setInterval(fetchLive, 15000);
 }
 
 async function triggerIngest() {
@@ -17,6 +38,29 @@ async function triggerIngest() {
     else { showToast('Ingest failed: ' + (result.error || result.output)); }
   } catch (e) { showToast('Error: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = '↻ Re-ingest'; }
+}
+
+function livePortId(portId) {
+  const mod = parseInt(portId.split('/')[1]);
+  if (mod === 3) return `10GigabitEthernet${portId}`;
+  if (mod === 2) {
+    const n = parseInt(portId.split('/')[2]);
+    if (n === 1 || n === 6) return `40GigabitEthernet${portId}`;
+    return `10GigabitEthernet${portId}`;
+  }
+  return `GigabitEthernet${portId}`;
+}
+
+function liveStatus(portId) {
+  if (!liveData || liveData.error || !liveData.interfaces) return null;
+  return liveData.interfaces[livePortId(portId)] || null;
+}
+
+function liveClass(portId) {
+  const ls = liveStatus(portId);
+  if (!ls) return null;
+  if (ls.oper_status === 1) return 'port-up';
+  return 'port-down';
 }
 
 function renderAll() {
@@ -52,6 +96,62 @@ function renderSystemChips(chassis) {
   }
 }
 
+function updateLiveIndicators() {
+  if (!liveData || liveData.error) return;
+  const lc = liveData.chassis || {};
+  const chips = document.getElementById('system-chips');
+
+  let liveChip = document.getElementById('live-timestamp');
+  if (!liveChip) {
+    liveChip = chip('', 'chip-temp');
+    liveChip.id = 'live-timestamp';
+    chips.prepend(liveChip);
+  }
+  const ts = liveData.timestamp ? new Date(liveData.timestamp * 1000).toLocaleTimeString() : '?';
+  liveChip.innerHTML = `<span class="chip-dot"></span>Live ${ts}`;
+
+  if (lc.temperature !== undefined) {
+    let found = false;
+    for (const ch of chips.children) {
+      if (ch.textContent.includes('Temp')) {
+        const parts = ch.textContent.split(': ');
+        ch.innerHTML = `<span class="chip-dot"></span>${parts[0]}: ${lc.temperature}°C`;
+        ch.className = 'chip chip-temp';
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      chips.appendChild(chip(`Temp: ${lc.temperature}°C`, 'chip-temp'));
+    }
+  }
+
+
+
+  document.querySelectorAll('.port').forEach(el => {
+    const pid = el.dataset.port;
+    const lc = liveClass(pid);
+    if (lc) {
+      el.className = `port ${lc}`;
+      if ((data.interfaces || {})[pid]?.inline_power) el.classList.add('port-poe');
+    }
+  });
+
+  updateLagChips();
+
+  if (selectedPort) showDetail(selectedPort);
+}
+
+function updateLagChips() {
+  document.querySelectorAll('.lag-port-chip').forEach(el => {
+    const pid = el.textContent;
+    const ls = liveStatus(pid);
+    if (ls) {
+      el.className = 'lag-port-chip ' + (ls.oper_status === 1 ? 'lag-port-up' : 'lag-port-down');
+    }
+  });
+}
+
 function chip(text, cls) {
   const d = document.createElement('span');
   d.className = 'chip ' + cls;
@@ -69,7 +169,7 @@ function portClass(p) {
 function makePortEl(portId) {
   const p = (data.interfaces || {})[portId];
   const el = document.createElement('div');
-  el.className = 'port ' + portClass(p);
+  el.className = 'port ' + (liveClass(portId) || portClass(p));
   if (p && p.inline_power) el.classList.add('port-poe');
   el.dataset.port = portId;
   el.textContent = portId.split('/').pop();
@@ -157,9 +257,9 @@ function renderLags() {
     const portsDiv = document.createElement('div');
     portsDiv.className = 'lag-ports';
     for (const pid of (lag.ports || [])) {
-      const p = (data.interfaces || {})[pid];
+      const ls = liveStatus(pid);
       const chip = document.createElement('span');
-      chip.className = 'lag-port-chip ' + (p && p.link === 'Up' ? 'lag-port-up' : 'lag-port-down');
+      chip.className = 'lag-port-chip ' + (ls ? (ls.oper_status === 1 ? 'lag-port-up' : 'lag-port-down') : 'lag-port-down');
       chip.textContent = pid;
       chip.addEventListener('click', () => showDetail(pid));
       chip.style.cursor = 'pointer';
@@ -171,7 +271,9 @@ function renderLags() {
 }
 
 function showDetail(portId) {
+  selectedPort = portId;
   const p = (data.interfaces || {})[portId];
+  const ls = liveStatus(portId);
   const empty = document.getElementById('detail-empty');
   const content = document.getElementById('detail-content');
   empty.style.display = 'none';
@@ -191,15 +293,18 @@ function showDetail(portId) {
     return `<div>${tags.join('')} ${label}</div>`;
   }).join('') || '<div style="color:var(--text-dim)">None</div>';
 
-  const stats = p.stats || {};
+  const parsedStats = p.stats || {};
+  const lsOk = ls && ls.oper_status !== undefined;
+  const linkState = lsOk ? (ls.oper_status === 1 ? 'Up' : 'Down') : p.link;
+  const speed = lsOk ? '' : (p.speed || '');
+  const status = linkState === 'Up' ? 'up' : linkState === 'Disable' ? 'disable' : 'down';
   const poeClass = p.inline_power ? 'poe-on' : 'poe-off';
   const poeText = p.inline_power ? '● On' : '○ Off';
-  const status = p.link === 'Up' ? 'up' : p.link === 'Disable' ? 'disable' : 'down';
 
   content.innerHTML = `
     <div class="detail-port-header">
       <span class="detail-port-id">${portId}</span>
-      <span class="detail-status-badge ${status}">${p.link} ${p.speed || ''}</span>
+      <span class="detail-status-badge ${status}">${linkState} ${speed}</span>
     </div>
     <div class="detail-grid">
       <div class="detail-field">
@@ -240,29 +345,28 @@ function showDetail(portId) {
       <div>${vlanHtml}</div>
     </div>
     <div class="detail-section">
-      <div class="detail-section-title">Statistics</div>
+      <div class="detail-section-title">Live Statistics (SNMP)</div>
       <div class="detail-grid">
         <div class="detail-field">
-          <div class="detail-field-label">In Packets</div>
-          <div class="detail-field-value">${(stats.in_packets || 0).toLocaleString()}</div>
+          <div class="detail-field-label">In Bytes</div>
+          <div class="detail-field-value">${ls ? (ls.in_octets || 0).toLocaleString() : 'N/A'}</div>
         </div>
         <div class="detail-field">
-          <div class="detail-field-label">Out Packets</div>
-          <div class="detail-field-value">${(stats.out_packets || 0).toLocaleString()}</div>
+          <div class="detail-field-label">Out Bytes</div>
+          <div class="detail-field-value">${ls ? (ls.out_octets || 0).toLocaleString() : 'N/A'}</div>
         </div>
         <div class="detail-field">
           <div class="detail-field-label">In Errors</div>
-          <div class="detail-field-value">${(stats.in_errors || 0).toLocaleString()}</div>
+          <div class="detail-field-value">${ls ? (ls.in_errors || 0).toLocaleString() : (parsedStats.in_errors || 0).toLocaleString()}</div>
         </div>
         <div class="detail-field">
           <div class="detail-field-label">Out Errors</div>
-          <div class="detail-field-value">${(stats.out_errors || 0).toLocaleString()}</div>
+          <div class="detail-field-value">${ls ? (ls.out_errors || 0).toLocaleString() : (parsedStats.out_errors || 0).toLocaleString()}</div>
         </div>
       </div>
-    </div>
-    <div class="detail-section">
-      <div class="detail-section-title">Name</div>
-      <div style="font-size:14px;color:var(--text-dim)">${p.name || '(none)'}</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-top:4px">
+        ${liveData && liveData.timestamp ? 'Updated ' + new Date(liveData.timestamp * 1000).toLocaleTimeString() : ''}
+      </div>
     </div>
   `;
 }
