@@ -1,6 +1,0 @@
-[console_scripts]
-icx-grab = icx_monitor.grab_info:main
-icx-ingest = icx_monitor.ingest:main
-icx-live = icx_monitor.live:main
-icx-parse = icx_monitor.parser:main
-icx-server = icx_monitor.server:main
