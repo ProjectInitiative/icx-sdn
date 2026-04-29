@@ -15,7 +15,7 @@ DATA_FILE = DATA_DIR / "latest.json"
 LIVE_FILE = DATA_DIR / "live.json"
 STATIC_DIR = PROJECT_ROOT / "static"
 COMMUNITY_FILE = DATA_DIR / "snmp_community.txt"
-PORT = 8080
+PORT = int(os.environ.get("ICX_SERVER_PORT", "8080"))
 
 
 class SwitchHandler(http.server.SimpleHTTPRequestHandler):

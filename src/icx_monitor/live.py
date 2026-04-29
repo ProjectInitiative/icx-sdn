@@ -16,7 +16,10 @@ PROJECT_ROOT = _project_root()
 DATA_DIR = PROJECT_ROOT / "data"
 COMMUNITY_FILE = DATA_DIR / "snmp_community.txt"
 LIVE_FILE = DATA_DIR / "live.json"
-HOST = "172.16.1.15"
+HOST = os.environ.get("ICX_SWITCH_HOST")
+if not HOST:
+    print("Error: ICX_SWITCH_HOST must be set", file=sys.stderr)
+    sys.exit(1)
 POLL_INTERVAL = 30
 
 OID_ifDescr = "1.3.6.1.2.1.2.2.1.2"
