@@ -294,8 +294,9 @@ function showDetail(portId) {
     if (v.tagged) tags.push('<span class="vlan-tag vlan-tag-t">T</span>');
     if (v.untagged) tags.push('<span class="vlan-tag vlan-tag-u">U</span>');
     if (v.native && !v.tagged && !v.untagged) tags.push('<span class="vlan-tag vlan-tag-u">PVID</span>');
+    if (v.native && v.untagged) tags.push('<span class="vlan-tag vlan-tag-u">PVID</span>');
     const label = v.name ? `${v.id} (${v.name})` : `${v.id}`;
-    return `<div>${tags.join('')} ${label}</div>`;
+    return `<div>${tags.join(' ')} ${label}</div>`;
   }).join('') || '<div style="color:var(--text-dim)">None</div>';
 
   const parsedStats = p.stats || {};

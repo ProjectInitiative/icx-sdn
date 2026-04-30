@@ -106,12 +106,12 @@ def parse_running_config(text):
             result["interfaces"][iface] = current_intf
             continue
         if current_intf is not None:
-            dm = re.match(r" dual-mode\s+(\d+)", line)
+            dm = re.match(r"dual-mode\s+(\d+)", line)
             if dm:
                 current_intf["dual_mode"] = int(dm.group(1))
             if "inline power" in line:
                 current_intf["inline_power"] = True
-            sd = re.match(r" speed-duplex\s+(\S+)", line)
+            sd = re.match(r"speed-duplex\s+(\S+)", line)
             if sd:
                 current_intf["speed_duplex"] = sd.group(1)
             if line == "disable":
@@ -345,10 +345,14 @@ def merge_data(data):
 
         port["vlans"] = []
         pvid = port.get("pvid")
+        dual = port.get("dual_mode")
         for vid, vlan in vlans.items():
             tagged = port_id in vlan.get("tagged", [])
             untagged = port_id in vlan.get("untagged", [])
             is_native = pvid is not None and vid == pvid
+            if dual is not None and vid == dual:
+                tagged = False
+                untagged = True
             if tagged or untagged or is_native:
                 port["vlans"].append({
                     "id": vid,
