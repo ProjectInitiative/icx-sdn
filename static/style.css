@@ -69,19 +69,19 @@ main {
 
 /* Ports Container: SFP+ left, RJ45 right */
 .ports-container {
-  display: flex; gap: 12px; align-items: flex-start;
+  display: flex; gap: 12px; align-items: stretch;
 }
 
 /* SFP+ Stacked (left side) */
 .sfp-stacked {
   display: flex; flex-direction: column; gap: 4px;
-  padding: 10px; background: var(--bg-card); border-radius: var(--radius);
+  padding: 12px; background: var(--bg-card); border-radius: var(--radius);
   border: 1px solid var(--border); justify-content: center;
 }
 .sfp-stacked .sfp-row {
-  display: flex; gap: 3px;
+  display: flex; gap: 4px;
 }
-.sfp-stacked .port { min-width: 32px; min-height: 32px; font-size: 10px; }
+.sfp-stacked .port { min-width: 36px; min-height: 36px; font-size: 10px; }
 .sfp-label, .port-label-title {
   font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
   color: var(--text-dim); text-align: center; margin-bottom: 3px;
