@@ -349,15 +349,15 @@ function showDetail(portId) {
     <div class="detail-grid">
       <div class="detail-field">
         <div class="detail-field-label">State</div>
-        <div class="detail-field-value">${p.state || 'N/A'}</div>
+        <div class="detail-field-value">${p.state && p.state !== 'None' ? p.state : '—'}</div>
       </div>
       <div class="detail-field">
         <div class="detail-field-label">Duplex</div>
-        <div class="detail-field-value">${p.duplex || 'N/A'}</div>
+        <div class="detail-field-value">${p.duplex && p.duplex !== 'None' ? p.duplex : '—'}</div>
       </div>
       <div class="detail-field">
         <div class="detail-field-label">Speed</div>
-        <div class="detail-field-value">${p.speed || 'N/A'}</div>
+        <div class="detail-field-value">${p.speed && p.speed !== 'None' ? p.speed : '—'}</div>
       </div>
       <div class="detail-field">
         <div class="detail-field-label">PVID</div>
