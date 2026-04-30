@@ -82,7 +82,7 @@ main {
   display: flex; gap: 3px;
 }
 .sfp-stacked .port { min-width: 32px; min-height: 32px; font-size: 10px; }
-.sfp-label {
+.sfp-label, .port-label-title {
   font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
   color: var(--text-dim); text-align: center; margin-bottom: 3px;
 }

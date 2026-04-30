@@ -194,7 +194,7 @@ function renderSfpPorts() {
   container.innerHTML = '';
   const label = document.createElement('div');
   label.className = 'sfp-label';
-  label.textContent = '10G SFP+';
+  label.textContent = 'SFP+ 10G';
   container.appendChild(label);
   const topRow = document.createElement('div');
   topRow.className = 'sfp-row';
@@ -218,6 +218,10 @@ function renderSfpPorts() {
 function renderRj45Ports() {
   const grid = document.getElementById('port-grid');
   grid.innerHTML = '';
+  const label = document.createElement('div');
+  label.className = 'port-label-title';
+  label.textContent = 'Gigabit PoE';
+  grid.appendChild(label);
   const topRow = document.createElement('div');
   topRow.className = 'port-row';
   const botRow = document.createElement('div');
