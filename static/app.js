@@ -379,6 +379,10 @@ function showDetail(portId) {
         <div class="detail-field-label">Tagged</div>
         <div class="detail-field-value">${p.tag || 'N/A'}</div>
       </div>
+      <div class="detail-field">
+        <div class="detail-field-label">Flow Control</div>
+        <div class="detail-field-value">${p.flow_control || 'Off'}</div>
+      </div>
     </div>
     <div class="detail-section">
       <div class="detail-section-title">VLAN Membership</div>

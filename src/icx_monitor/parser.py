@@ -116,6 +116,8 @@ def parse_running_config(text):
                 current_intf["speed_duplex"] = sd.group(1)
             if line == "disable":
                 current_intf["disabled"] = True
+            if line.startswith("flow-control"):
+                current_intf["flow_control"] = line
             if line.startswith("!") or line.startswith("interface"):
                 current_intf = None
 
@@ -339,6 +341,7 @@ def merge_data(data):
         port["dual_mode"] = cfg.get("dual_mode")
         port["speed_duplex"] = cfg.get("speed_duplex")
         port["disabled"] = cfg.get("disabled", False)
+        port["flow_control"] = cfg.get("flow_control")
 
         if port_id in stats:
             port["stats"] = stats[port_id]
