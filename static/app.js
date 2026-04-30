@@ -184,12 +184,22 @@ function makePortEl(portId) {
 }
 
 function renderSfpPorts() {
-  const row = document.getElementById('sfp-row');
-  row.innerHTML = '';
-  for (let i = 1; i <= 8; i++) {
-    const pid = `1/3/${i}`;
-    row.appendChild(makePortEl(pid));
+  const container = document.getElementById('sfp-stacked');
+  container.innerHTML = '';
+  const label = document.createElement('div');
+  label.className = 'sfp-label';
+  label.textContent = '10G SFP+';
+  container.appendChild(label);
+  const topRow = document.createElement('div');
+  topRow.className = 'sfp-row';
+  const botRow = document.createElement('div');
+  botRow.className = 'sfp-row';
+  for (let i = 1; i <= 4; i++) {
+    topRow.appendChild(makePortEl(`1/3/${2 * i - 1}`));
+    botRow.appendChild(makePortEl(`1/3/${2 * i}`));
   }
+  container.appendChild(topRow);
+  container.appendChild(botRow);
 }
 
 function renderRj45Ports() {

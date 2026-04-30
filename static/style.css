@@ -67,13 +67,27 @@ main {
 }
 .section-label:first-child { margin-top: 0; }
 
-/* SFP+ Row */
-.sfp-row {
-  display: flex; gap: 8px; flex-wrap: wrap; padding: 12px;
-  background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border);
+/* Ports Container: SFP+ left, RJ45 right */
+.ports-container {
+  display: flex; gap: 12px; align-items: stretch;
 }
 
-/* Port Grid */
+/* SFP+ Stacked (left side) */
+.sfp-stacked {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 12px; background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); min-width: 140px; justify-content: center;
+}
+.sfp-stacked .sfp-row {
+  display: flex; gap: 4px;
+}
+.sfp-stacked .port { min-width: 30px; min-height: 30px; }
+.sfp-label {
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-dim); text-align: center; margin-bottom: 4px;
+}
+
+/* Port Grid (right side) */
 .port-grid {
   display: flex; flex-direction: column; gap: 4px;
   padding: 12px; background: var(--bg-card); border-radius: var(--radius);
