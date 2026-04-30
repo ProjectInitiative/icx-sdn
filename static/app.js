@@ -417,11 +417,17 @@ function showToast(msg) {
 
 function toggleFlip() {
   isFlipped = !isFlipped;
-  const app = document.getElementById('app');
   const btn = document.getElementById('btn-flip');
-  app.classList.toggle('flipped', isFlipped);
   btn.classList.toggle('active');
   btn.textContent = isFlipped ? '↻ Normal' : '↻ Rotate';
+  const container = document.querySelector('.ports-container');
+  const sfp = document.getElementById('sfp-stacked');
+  const rj = document.getElementById('port-grid');
+  if (isFlipped) {
+    container.insertBefore(rj, sfp);
+  } else {
+    container.insertBefore(sfp, rj);
+  }
   renderSfpPorts();
   renderRj45Ports();
   renderQsqfPorts();
