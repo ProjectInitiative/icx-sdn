@@ -397,4 +397,12 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+function toggleRotate() {
+  const app = document.getElementById('app');
+  const btn = document.getElementById('btn-rotate');
+  app.classList.toggle('rotated');
+  btn.classList.toggle('active');
+  btn.textContent = app.classList.contains('rotated') ? '↻ Normal' : '↻ Rotate';
+}
+
 fetchData();
