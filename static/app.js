@@ -175,8 +175,13 @@ function portClass(p) {
 function makePortEl(portId) {
   const p = (data.interfaces || {})[portId];
   const el = document.createElement('div');
-  el.className = 'port ' + (liveClass(portId) || portClass(p));
-  if (p && p.inline_power) el.classList.add('port-poe');
+  if (p && p.link === 'Disable') {
+    el.className = 'port port-disable';
+    if (p.inline_power) el.classList.add('port-poe');
+  } else {
+    el.className = 'port ' + (liveClass(portId) || portClass(p));
+    if (p && p.inline_power) el.classList.add('port-poe');
+  }
   el.dataset.port = portId;
   el.textContent = portId.split('/').pop();
   el.title = portId;
