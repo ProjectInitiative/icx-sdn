@@ -2,6 +2,7 @@ let data = null;
 let liveData = null;
 let selectedPort = null;
 let liveInterval = null;
+let isFlipped = false;
 
 async function fetchData() {
   const r = await fetch('/api/data');
@@ -195,8 +196,15 @@ function renderSfpPorts() {
   const botRow = document.createElement('div');
   botRow.className = 'sfp-row';
   for (let i = 1; i <= 4; i++) {
-    topRow.appendChild(makePortEl(`1/3/${2 * i - 1}`));
-    botRow.appendChild(makePortEl(`1/3/${2 * i}`));
+    const odd = 2 * i - 1;
+    const even = 2 * i;
+    if (isFlipped) {
+      topRow.appendChild(makePortEl(`1/3/${9 - odd}`));
+      botRow.appendChild(makePortEl(`1/3/${9 - even}`));
+    } else {
+      topRow.appendChild(makePortEl(`1/3/${odd}`));
+      botRow.appendChild(makePortEl(`1/3/${even}`));
+    }
   }
   container.appendChild(topRow);
   container.appendChild(botRow);
@@ -212,8 +220,13 @@ function renderRj45Ports() {
   for (let i = 1; i <= 24; i++) {
     const odd = 2 * i - 1;
     const even = 2 * i;
-    topRow.appendChild(makePortEl(`1/1/${odd}`));
-    botRow.appendChild(makePortEl(`1/1/${even}`));
+    if (isFlipped) {
+      topRow.appendChild(makePortEl(`1/1/${49 - odd}`));
+      botRow.appendChild(makePortEl(`1/1/${49 - even}`));
+    } else {
+      topRow.appendChild(makePortEl(`1/1/${odd}`));
+      botRow.appendChild(makePortEl(`1/1/${even}`));
+    }
   }
   grid.appendChild(topRow);
   grid.appendChild(botRow);
@@ -397,12 +410,18 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-function toggleRotate() {
+function toggleFlip() {
+  isFlipped = !isFlipped;
   const app = document.getElementById('app');
-  const btn = document.getElementById('btn-rotate');
-  app.classList.toggle('rotated');
+  const btn = document.getElementById('btn-flip');
+  app.classList.toggle('flipped', isFlipped);
   btn.classList.toggle('active');
-  btn.textContent = app.classList.contains('rotated') ? '↻ Normal' : '↻ Rotate';
+  btn.textContent = isFlipped ? '↻ Normal' : '↻ Rotate';
+  renderSfpPorts();
+  renderRj45Ports();
+  renderQsqfPorts();
+  renderLags();
+  if (selectedPort) showDetail(selectedPort);
 }
 
 fetchData();

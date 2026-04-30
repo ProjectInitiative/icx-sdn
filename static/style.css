@@ -87,14 +87,16 @@ main {
   color: var(--text-dim); text-align: center; margin-bottom: 3px;
 }
 
-/* Layout rotation (180 degrees) */
-.rotated .panel-switch { transform: rotate(180deg); }
-#btn-rotate {
+/* Layout flip (reversed port order, readable text) */
+.flipped .ports-container { flex-direction: row-reverse; }
+.flipped .sfp-row { flex-direction: row-reverse; }
+.flipped .port-row { flex-direction: row-reverse; }
+#btn-flip {
   padding: 6px 16px; border-radius: var(--radius); border: 1px solid var(--border);
   background: var(--bg); color: var(--text); cursor: pointer; font-size: 13px;
 }
-#btn-rotate:hover { background: var(--bg-hover); }
-#btn-rotate.active { background: #1e3a5f; border-color: var(--blue); }
+#btn-flip:hover { background: var(--bg-hover); }
+#btn-flip.active { background: #1e3a5f; border-color: var(--blue); }
 
 /* Port Grid (right side) */
 .port-grid {
