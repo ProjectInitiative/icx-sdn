@@ -18,9 +18,10 @@
       inputs.pyproject-nix.follows = "pyproject-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    ops-utils.url = "github:projectinitiative/ops-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils, uv2nix, pyproject-nix, pyproject-build-systems }:
+  outputs = { self, nixpkgs, flake-utils, uv2nix, pyproject-nix, pyproject-build-systems, ops-utils }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
 
@@ -125,10 +126,39 @@
 
     in
     {
-      packages = forSystems (system: {
-        default = buildFor system;
-        docker = dockerFor system;
-      });
+      packages = forSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          ops = ops-utils.lib.mkUtils { inherit pkgs; };
+        in
+        {
+          default = buildFor system;
+          docker = dockerFor system;
+          inherit (ops) build-image push-multi-arch;
+        });
+
+      apps = forSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          ops = ops-utils.lib.mkUtils { inherit pkgs; };
+          opsApps = ops-utils.lib.mkApps { inherit pkgs; } ops;
+        in
+        {
+          inherit (opsApps) build-image push-multi-arch push-insecure;
+
+          build-docker = {
+            type = "app";
+            program = toString (pkgs.writeShellScript "build-docker" ''
+              set -e
+              echo "Building ICX monitor container for ${system}..."
+              nix build ".#packages.${system}.docker" -o result-docker
+              echo "Loading into Docker..."
+              docker load < result-docker
+              rm result-docker
+              echo "✅ Container for ${system} ready!"
+            '');
+          };
+        });
 
       devShells = forSystems (system: {
         default =
