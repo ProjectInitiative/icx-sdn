@@ -2,12 +2,14 @@ from netmiko import ConnectHandler
 import datetime
 import os
 
+
 def _req_env(key):
     val = os.environ.get(key)
     if not val:
         print(f"Error: {key} must be set", file=__import__("sys").stderr)
         __import__("sys").exit(1)
     return val
+
 
 def scrape_switch():
     host = _req_env("ICX_SWITCH_HOST")
@@ -16,18 +18,20 @@ def scrape_switch():
     key_file = os.environ.get("ICX_SSH_KEY")
 
     if not password and not key_file:
-        print("Error: set ICX_SSH_KEY or ICX_SSH_PASSWORD", file=__import__("sys").stderr)
+        print(
+            "Error: set ICX_SSH_KEY or ICX_SSH_PASSWORD", file=__import__("sys").stderr
+        )
         __import__("sys").exit(1)
 
     device = {
-        'device_type': 'brocade_fastiron',
-        'host': host,
-        'username': username,
-        'use_keys': not password,
-        'key_file': key_file,
-        'password': password,
-        'disabled_algorithms': {"pubkeys": ["rsa-sha2-256", "rsa-sha2-512"]},
-        'allow_agent': False,
+        "device_type": "brocade_fastiron",
+        "host": host,
+        "username": username,
+        "use_keys": not password,
+        "key_file": key_file,
+        "password": password,
+        "disabled_algorithms": {"pubkeys": ["rsa-sha2-256", "rsa-sha2-512"]},
+        "allow_agent": False,
     }
 
     try:
@@ -43,7 +47,7 @@ def scrape_switch():
                 "show interface brief",
                 "show lag",
                 "show chassis",
-                "show statistics brief"
+                "show statistics brief",
             ]
 
             print(f"Authenticated! Streaming data to {filename}...")
@@ -59,8 +63,10 @@ def scrape_switch():
     except Exception as e:
         print(f"Connection failed: {e}")
 
+
 def main():
     scrape_switch()
+
 
 if __name__ == "__main__":
     main()

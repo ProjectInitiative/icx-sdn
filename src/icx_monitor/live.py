@@ -6,11 +6,13 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+
 def _project_root():
     env = os.environ.get("ICX_MONITOR_ROOT")
     if env:
         return Path(env)
     return Path(__file__).resolve().parent.parent.parent
+
 
 PROJECT_ROOT = _project_root()
 DATA_DIR = PROJECT_ROOT / "data"
@@ -53,6 +55,7 @@ def _strip_type(val):
     if ": " in val:
         _, val = val.split(": ", 1)
     return val.strip().strip('"')
+
 
 def snmpwalk(oid):
     out = _snmp_run("walk", oid)
@@ -167,18 +170,25 @@ def poll():
 
 def main():
     if not COMMUNITY_FILE.exists():
-        print("Create data/snmp_community.txt with your SNMP read community string", file=sys.stderr)
+        print(
+            "Create data/snmp_community.txt with your SNMP read community string",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     watch = "-w" in sys.argv or "--watch" in sys.argv
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     if watch:
-        LIVE_FILE.write_text(json.dumps({
-            "_mode": "starting",
-            "timestamp": time.time(),
-            "message": "SNMP poller starting — first poll in progress...",
-        }))
+        LIVE_FILE.write_text(
+            json.dumps(
+                {
+                    "_mode": "starting",
+                    "timestamp": time.time(),
+                    "message": "SNMP poller starting — first poll in progress...",
+                }
+            )
+        )
         while True:
             data = poll()
             data["_mode"] = "stream"
@@ -186,7 +196,9 @@ def main():
             n = len(data.get("interfaces", {}))
             err = data.get("error", "")
             ts = time.strftime("%H:%M:%S")
-            print(f"[{ts}] {n} interfaces" + (f" — {err}" if err else ""), file=sys.stderr)
+            print(
+                f"[{ts}] {n} interfaces" + (f" — {err}" if err else ""), file=sys.stderr
+            )
             time.sleep(POLL_INTERVAL)
     else:
         print(json.dumps(poll(), indent=2))

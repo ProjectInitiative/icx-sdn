@@ -56,9 +56,7 @@ def parse_running_config(text):
         elif line.startswith("hostname "):
             result["hostname"] = line[9:]
 
-    vlan_pattern = re.compile(
-        r"^vlan (\d+)(?: name (.+?))? by port"
-    )
+    vlan_pattern = re.compile(r"^vlan (\d+)(?: name (.+?))? by port")
     current_vlan = None
     for line in text.split("\n"):
         line = line.strip()
@@ -121,17 +119,17 @@ def parse_running_config(text):
             if line.startswith("!") or line.startswith("interface"):
                 current_intf = None
 
-    lag_stanza_pattern = re.compile(
-        r"^lag\s+(\S+)\s+dynamic\s+id\s+(\d+)"
-    )
+    lag_stanza_pattern = re.compile(r"^lag\s+(\S+)\s+dynamic\s+id\s+(\d+)")
     for line in text.split("\n"):
         line = line.strip()
         m = lag_stanza_pattern.match(line)
         if m:
-            result["lags"].append({
-                "name": m.group(1),
-                "id": int(m.group(2)),
-            })
+            result["lags"].append(
+                {
+                    "name": m.group(1),
+                    "id": int(m.group(2)),
+                }
+            )
 
     return result
 
@@ -235,9 +233,7 @@ def parse_lags(text):
             if lm:
                 current_lag["lacp_key"] = int(lm.group(1))
 
-            part_line = re.match(
-                r"([\d/]+)\s+(\S+)\s+(\S+)\s+(\d+)", line
-            )
+            part_line = re.match(r"([\d/]+)\s+(\S+)\s+(\S+)\s+(\d+)", line)
             if part_line and current_lag:
                 pid = part_line.group(1)
                 if pid in current_lag["ports"]:
@@ -259,9 +255,7 @@ def parse_chassis(text):
         "macs": {},
     }
 
-    ps_pattern = re.compile(
-        r"Power supply (\d+) \((.*?)\) present, status (\S+)"
-    )
+    ps_pattern = re.compile(r"Power supply (\d+) \((.*?)\) present, status (\S+)")
     sensor = ""
     for line in text.split("\n"):
         ls = line.strip()
@@ -277,10 +271,12 @@ def parse_chassis(text):
 
         fm = re.match(r"Fan (\d+) (\S+), speed", ls)
         if fm:
-            chassis["fans"].append({
-                "id": int(fm.group(1)),
-                "status": fm.group(2),
-            })
+            chassis["fans"].append(
+                {
+                    "id": int(fm.group(1)),
+                    "status": fm.group(2),
+                }
+            )
             continue
 
         temp_m = re.match(r"Current temperature\s+:\s+([\d.]+) deg-C", ls)
@@ -357,13 +353,15 @@ def merge_data(data):
                 tagged = False
                 untagged = True
             if tagged or untagged or is_native:
-                port["vlans"].append({
-                    "id": vid,
-                    "name": vlan.get("name", ""),
-                    "tagged": tagged,
-                    "untagged": untagged,
-                    "native": is_native,
-                })
+                port["vlans"].append(
+                    {
+                        "id": vid,
+                        "name": vlan.get("name", ""),
+                        "tagged": tagged,
+                        "untagged": untagged,
+                        "native": is_native,
+                    }
+                )
 
     data["lag_details"] = lag_details
     return data
@@ -395,8 +393,10 @@ def ingest(log_path=None):
 
 def main():
     import sys
+
     log = sys.argv[1] if len(sys.argv) > 1 else None
     ingest(log)
+
 
 if __name__ == "__main__":
     main()

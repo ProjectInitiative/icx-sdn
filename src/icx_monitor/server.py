@@ -32,7 +32,9 @@ class SwitchHandler(http.server.SimpleHTTPRequestHandler):
                 with open(DATA_FILE) as f:
                     self.wfile.write(f.read().encode())
             else:
-                self.wfile.write(json.dumps({"error": "No data — run ingest first"}).encode())
+                self.wfile.write(
+                    json.dumps({"error": "No data — run ingest first"}).encode()
+                )
             return
 
         if self.path == "/api/live":
@@ -44,7 +46,11 @@ class SwitchHandler(http.server.SimpleHTTPRequestHandler):
                 with open(LIVE_FILE) as f:
                     self.wfile.write(f.read().encode())
             else:
-                self.wfile.write(json.dumps({"error": "No live data — configure SNMP and start poller"}).encode())
+                self.wfile.write(
+                    json.dumps(
+                        {"error": "No live data — configure SNMP and start poller"}
+                    ).encode()
+                )
             return
 
         if self.path == "/api/ingest":
@@ -54,9 +60,16 @@ class SwitchHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 result = subprocess.run(
                     [sys.executable, "-m", "icx_monitor.ingest"],
-                    cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=120,
+                    cwd=PROJECT_ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
                 )
-                out = {"success": result.returncode == 0, "output": result.stdout, "error": result.stderr}
+                out = {
+                    "success": result.returncode == 0,
+                    "output": result.stdout,
+                    "error": result.stderr,
+                }
             except subprocess.TimeoutExpired:
                 out = {"success": False, "error": "Ingest timed out"}
             except Exception as e:
@@ -77,6 +90,7 @@ def start_snmp_poller():
     if not COMMUNITY_FILE.exists():
         return
     import shutil
+
     env = os.environ.copy()
     env.setdefault("PATH", "")
     for tool in ["snmpwalk", "snmpget", "nix-shell"]:
@@ -85,14 +99,18 @@ def start_snmp_poller():
             env["PATH"] = str(Path(path).parent) + ":" + env["PATH"]
     proc = subprocess.Popen(
         [sys.executable, "-m", "icx_monitor.live", "--watch"],
-        cwd=PROJECT_ROOT, stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE, env=env,
+        cwd=PROJECT_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        env=env,
     )
     print(f"  SNMP poller started (PID {proc.pid})")
     import threading
+
     def log_stderr():
         for line in iter(proc.stderr.readline, b""):
             print(f"  [snmp-poller] {line.decode().strip()}")
+
     threading.Thread(target=log_stderr, daemon=True).start()
 
 
@@ -123,6 +141,7 @@ def serve():
 
 def main():
     serve()
+
 
 if __name__ == "__main__":
     main()

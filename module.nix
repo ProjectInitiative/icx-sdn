@@ -1,11 +1,17 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
 let
   cfg = config.services.icx-monitor;
   pkg = cfg.package;
-in {
+in
+{
   options.services.icx-monitor = {
     enable = mkEnableOption "ICX switch monitor service";
 
@@ -28,19 +34,19 @@ in {
         description = "SSH username for switch access.";
       };
       sshKeyFile = mkOption {
-        type = types.nullOr types.path;
+        type = types.nullOr types.str;
         default = null;
         description = "Path to SSH private key for switch authentication. If null, password auth is used.";
       };
       sshPasswordFile = mkOption {
-        type = types.nullOr types.path;
+        type = types.nullOr types.str;
         default = null;
         description = "Path to file containing SSH password (alternative to key-based auth).";
       };
     };
 
     snmpCommunityFile = mkOption {
-      type = types.nullOr types.path;
+      type = types.nullOr types.str;
       default = null;
       description = "Path to file containing SNMP read community string for live polling.";
     };
@@ -52,7 +58,7 @@ in {
     };
 
     dataDir = mkOption {
-      type = types.path;
+      type = types.str;
       default = "/var/lib/icx-monitor";
       description = "Runtime data directory (switch data, live metrics, config).";
     };
@@ -97,7 +103,8 @@ in {
         ++ optional (cfg.snmpCommunityFile != null) "ICX_MONITOR_ROOT=${cfg.dataDir}";
 
         # Mount secrets
-        LoadCredential = optional (cfg.switch.sshKeyFile != null) "ssh-key:${cfg.switch.sshKeyFile}"
+        LoadCredential =
+          optional (cfg.switch.sshKeyFile != null) "ssh-key:${cfg.switch.sshKeyFile}"
           ++ optional (cfg.switch.sshPasswordFile != null) "ssh-password:${cfg.switch.sshPasswordFile}"
           ++ optional (cfg.snmpCommunityFile != null) "snmp-community:${cfg.snmpCommunityFile}";
 
@@ -111,7 +118,11 @@ in {
         ProtectKernelModules = true;
         ProtectControlGroups = true;
         MemoryDenyWriteExecute = true;
-        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+        RestrictAddressFamilies = [
+          "AF_INET"
+          "AF_INET6"
+          "AF_UNIX"
+        ];
         RestrictNamespaces = true;
         LockPersonality = true;
       };
