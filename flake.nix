@@ -217,6 +217,8 @@
               m.pkgs.net-snmp
               m.pkgs.nixfmt
               m.pkgs.ruff
+              m.pkgs.docker
+              m.pkgs.docker-client
             ];
             env = {
               UV_NO_SYNC = "1";
@@ -228,6 +230,8 @@
               export PATH="${m.venv}/bin:$PATH"
               echo "icx-monitor dev shell"
               echo "  commands: icx-{server,ingest,grab,parse,live}"
+              echo "  container: nix build .#docker, nix run .#build-docker"
+              echo "  publish:   nix run .#push-multi-arch -- docker icx-monitor ghcr.io/owner"
               echo "  snmpwalk/snmpget available"
             '';
           };
