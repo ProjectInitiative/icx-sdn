@@ -1,74 +1,109 @@
-# Design — ICX Monitor
+# Network State Architecture
 
-## Why Nix?
+## One source of truth
 
-The project uses Nix for reproducible builds, hermetic development environments, and declarative deployment. Every dependency — Python packages, SNMP tools, build utilities — is managed through `flake.nix`. No manual `apt install` or `pip install` required.
-
-## Architecture
-
-### Data Flow
+A single `network.yaml` declares the entire LAN — VLANs, subnets, port
+assignments, 802.1x policies, and DHCP scopes. Two renderers target
+different devices from the same data:
 
 ```
-ICX Switch
-  ├── SSH (netmiko)  ──→ grab_info.py ──→ raw log ──→ parser.py ──→ data/latest.json
-  └── SNMP (net-snmp) ──→ live.py ──→ data/live.json
-                                              ↓
-                                        server.py ──→ Web UI :8080
+network.yaml
+     │
+     ├── Brocade renderer ──> web API / SSH commands
+     │
+     └── NixOS renderer  ──> dhcpd.conf, freeradius, nftables
 ```
 
-- **SSH path**: Deep config data (VLANs, LAGs, PoE) via CLI commands. Heavy — run on-demand.
-- **SNMP path**: Lightweight real-time data (interface counters, link status, temperature). Polls every 30s.
-- **Web UI**: Single-page app. Fetches config once, polls live data every 15s.
+## Schema
 
-### Python Dependencies
+```yaml
+# ── VLANs ──────────────────────────────────────────────────────
+vlans:
+  10:
+    name: k8s-backplane
+    subnet: 10.10.10.0/24
+    dhcp:
+      pool: 10.10.10.100-10.10.10.200
+      router: 10.10.10.1
+      dns: [10.10.10.1]
 
-Managed via `uv2nix` + `pyproject.nix`:
-- `pyproject.toml` declares project and dependencies
-- `uv.lock` pins exact versions
-- `flake.nix` builds Python environment from lockfile
-- No manual flake edits for Python dependency changes
+  20:
+    name: iot
+    subnet: 10.10.20.0/24
+    dhcp:
+      pool: 10.10.20.100-10.10.20.200
+      router: 10.10.20.1
 
-### Nix Flake Structure
+  1024:
+    name: native
+    subnet: 172.16.1.0/24
 
-The flake builds everything once per system via `mkPkg` and shares results across all outputs:
+# ── Switch ports ───────────────────────────────────────────────
+ports:
+  1/2/2:    { vlan: 10, speed: 10G-full }
+  1/2/3:    { vlan: 10, speed: 10G-full }
+  1/2/4:    { vlan: 10, speed: 10G-full }
+  1/2/7:    { vlan: 10, speed: 10G-full }
+  1/2/8:    { vlan: 10, speed: 10G-full }
+  1/2/9:    { vlan: 10, speed: 10G-full }
+  1/1/44-48: { vlan: 20, poe: true }
+  1/1/5:    { vlan: 20 }
+  # omitted = dual-mode tagged trunk (existing behaviour)
 
-- `packages.default` — Wrapped application with net-snmp in PATH
-- `packages.docker` — OCI container image
-- `devShells.default` — Development environment (inherits venv from package)
-- `nixosModules.default` — NixOS module for systemd deployment
-- `overlays.default` — nixpkgs overlay for `pkgs.icx-monitor`
+# ── LAGs ───────────────────────────────────────────────────────
+lags:
+  server1: { id: 1, ports: [1/2/2, 1/2/7] }
+  server2: { id: 2, ports: [1/2/3, 1/2/8] }
+  server3: { id: 3, ports: [1/2/4, 1/2/9] }
+  beeflet: { id: 4, ports: [1/2/5, 1/2/10] }
 
-### NixOS Module
+# ── 802.1x ─────────────────────────────────────────────────────
+dot1x:
+  enabled: true
+  radius:
+    server: 10.10.10.2
+    secret: "…"           # or ref: sops://…/radius
+  default_vlan: 20
+  ports:
+    1/1/1-48:
+      auth: dot1x
+      fallback_vlan: 20
+    1/2/1-10:
+      auth: none          # server trunks
+    1/3/1-8:
+      auth: none          # 10G uplinks
 
-The module deploys `icx-server` as a hardened systemd service with:
-- `DynamicUser` for privilege separation
-- `LoadCredential` for secrets (SSH key, SNMP community)
-- `ProtectSystem` / `PrivateTmp` sandboxing
-- Runtime data at `/var/lib/icx-monitor`
+# ── Static routes ──────────────────────────────────────────────
+routes:
+  - to: 0.0.0.0/0
+    via: 172.16.1.1
+    vlan: 1024
 
-### SSH Key Handling
+# ── Router (NixOS) ────────────────────────────────────────────
+router:
+  interface: eth0         # trunk port to switch
+  dhcp: true              # generate dhcpd.conf
+  radius: true            # generate freeradius config
+  firewall:               # generate nftables rules
+    - action: accept
+      from: vlan 10
+      to: any
+    - action: accept
+      from: vlan 20
+      to: vlan 1024       # iot can reach native/WAN
+    - action: drop
+      from: vlan 20
+      to: vlan 10         # iot isolated from k8s
+```
 
-The ICX 6610 requires legacy SSH algorithms (`diffie-hellman-group1-sha1`, `ssh-rsa`). Netmiko connects with `disabled_algorithms` to force `ssh-rsa` pubkey auth. The SSH key path is configured via `ICX_SSH_KEY` environment variable (no hardcoded paths).
+## Rendering
 
-### SNMP Live Polling
-
-Uses `snmpwalk`/`snmpget` via `nix-shell -p net-snmp` for reliable availability across environments. The poller runs as a background subprocess spawned by the server.
-
-### Web UI
-
-Single-page HTML/CSS/JS with:
-- Dark theme (Ubiquiti-style)
-- Front-panel port layout with alternating odd/even rows
-- 180-degree flip for wall-mount switches
-- Live port status updates from SNMP
-- Per-port detail panel (VLANs, stats, PoE, flow control)
-
-## Why These Patterns
-
-| Decision | Rationale |
-|---|---|
-| `uv2nix` over `python3.withPackages` | Lockfile-pinned deps, deterministic builds |
-| `mkPkg` shared builder | Single source of truth for pkg/venv/docker |
-| `nix-shell` for snmp tools | Available on NixOS without system package install |
-| `subprocess.Popen` for SNMP poller | Separate process avoids blocking the web server |
-| `DynamicUser` in systemd service | No persistent system user needed |
+| Concern | Renderer | Target |
+|---|---|---|
+| VLAN + port config | `icx_apply` (Python) | Brocade web API / SSH |
+| LAG config | `icx_apply` | Brocade web API / SSH |
+| 802.1x | `icx_apply` | Brocade SSH (CLI-only) |
+| ACLs / routes | `icx_apply` | Brocade SSH |
+| DHCP pools | NixOS module | `services.dhcpd` / `kea` |
+| RADIUS users | NixOS module | `services.freeradius` |
+| Firewall | NixOS module | `networking.nftables` |

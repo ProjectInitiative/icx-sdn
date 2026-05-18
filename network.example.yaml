@@ -1,0 +1,112 @@
+# Declarative network state — one source of truth for the Brocade ICX
+# switch and the NixOS router.
+#
+# Usage:
+#   nix develop -c python scripts/apply_network.py network.yaml
+
+# ── VLANs ──────────────────────────────────────────────────────
+# Each VLAN can declare its subnet for the NixOS router to serve
+# DHCP and routing on.
+
+vlans:
+  1:
+    name: mgmnt
+    subnet: 172.16.1.0/24
+    dhcp:
+      pool: 172.16.1.100-172.16.1.200
+      router: 172.16.1.1
+      dns: [172.16.1.1]
+
+  10:
+    name: k8s-backplane
+    subnet: 10.10.10.0/24
+    dhcp:
+      pool: 10.10.10.100-10.10.10.200
+      router: 10.10.10.1
+
+  20:
+    name: iot
+    subnet: 10.10.20.0/24
+    dhcp:
+      pool: 10.10.20.50-10.10.20.200
+      router: 10.10.20.1
+
+  1024:
+    name: native
+    subnet: 172.16.1.0/24
+    router_interface: ve 1
+
+# ── Switch ports ───────────────────────────────────────────────
+# Ports not listed keep their current config (unchanged).
+
+ports:
+  # 10G server trunks — LAG members will be configured in lags section
+  1/2/2: { speed: 10G-full }
+  1/2/3: { speed: 10G-full }
+  1/2/4: { speed: 10G-full }
+  1/2/5: { speed: 10G-full }
+  1/2/7: { speed: 10G-full }
+  1/2/8: { speed: 10G-full }
+  1/2/9: { speed: 10G-full }
+  1/2/10: { speed: 10G-full }
+
+  # 10G uplinks
+  1/3/1-8: { speed: 10G-full }
+
+  # IoT devices — PoE, untagged VLAN 20
+  1/1/44-48: { vlan: 20, poe: true }
+  1/1/5: { vlan: 20 }
+
+# ── LAGs ───────────────────────────────────────────────────────
+
+lags:
+  server1: { id: 1, ports: [1/2/2, 1/2/7] }
+  server2: { id: 2, ports: [1/2/3, 1/2/8] }
+  server3: { id: 3, ports: [1/2/4, 1/2/9] }
+  beeflet: { id: 4, ports: [1/2/5, 1/2/10] }
+
+# ── 802.1x ─────────────────────────────────────────────────────
+# Authenticate devices by MAC via RADIUS, assign to correct VLAN.
+
+dot1x:
+  enabled: true
+  radius:
+    server: 172.16.1.1
+    secret: "${SOPS_SECRET_radius}"   # or inline, or sops://… reference
+  default_vlan: 20
+  ports:
+    1/1/1-48:
+      auth: dot1x
+      fallback_vlan: 20
+    1/2/1-10:
+      auth: none                      # server trunks skip 802.1x
+    1/3/1-8:
+      auth: none                      # 10G uplinks skip 802.1x
+
+# ── Static routes ──────────────────────────────────────────────
+
+routes:
+  - to: 0.0.0.0/0
+    via: 172.16.1.1
+    vlan: 1024
+
+# ── Router (NixOS) ────────────────────────────────────────────
+# This section drives the NixOS router config generation.
+# The router runs on the management VLAN (1024/native) and provides
+# DHCP, RADIUS, and inter-VLAN routing.
+
+router:
+  hostname: gateway
+  interface: eth0                     # trunk to switch
+  dhcp: true                          # generate kea/dhcpd config
+  radius: true                        # generate freeradius config
+  firewall:
+    - from: vlan 10
+      to: any
+      action: accept
+    - from: vlan 20
+      to: vlan 1024
+      action: accept                  # IoT can reach WAN
+    - from: vlan 20
+      to: vlan 10
+      action: drop                    # IoT isolated from k8s

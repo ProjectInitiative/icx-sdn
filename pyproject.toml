@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "netmiko>=4.3.0",
     "paramiko",
+    "pyyaml>=6.0.3",
 ]
 
 [project.optional-dependencies]
