@@ -6,10 +6,12 @@ let dataInterval = null;
 let isFlipped = false;
 
 async function fetchData() {
+  const scrollY = window.scrollY;
   const r = await fetch('/api/data');
   data = await r.json();
   if (data.error) { showToast('No data yet. Run ingest first.'); return; }
   renderAll();
+  window.scrollTo(0, scrollY);
   if (!liveInterval) startLivePolling();
 }
 
