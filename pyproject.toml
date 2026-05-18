@@ -8,6 +8,15 @@ dependencies = [
     "paramiko",
 ]
 
+[project.optional-dependencies]
+agent = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "marker-pdf>=0.1.0",
+    "netmiko>=4.3.0",
+    "textfsm>=2.0.0",
+]
+
 [project.scripts]
 icx-grab = "icx_monitor.grab_info:main"
 icx-parse = "icx_monitor.parser:main"

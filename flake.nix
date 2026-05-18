@@ -62,6 +62,7 @@
           );
 
           venv = pythonSet.mkVirtualEnv "icx-env" workspace.deps.default;
+          agent-venv = pythonSet.mkVirtualEnv "agent-env" workspace.deps.optionals;
 
           inherit ((pkgs.callPackage pyproject-nix.build.util { })) mkApplication;
 
@@ -143,6 +144,7 @@
             pkgs
             lib
             venv
+            agent-venv
             pkg
             docker
             ops
@@ -233,6 +235,33 @@
               echo "  container: nix build .#docker, nix run .#build-docker"
               echo "  publish:   nix run .#push-multi-arch -- docker icx-monitor ghcr.io/owner"
               echo "  snmpwalk/snmpget available"
+            '';
+          };
+
+          agent = m.pkgs.mkShell {
+            packages = with m.pkgs; [
+              m.agent-venv
+              git
+              stdenv.cc.cc.lib
+              zlib
+              glib
+            ];
+            shellHook = ''
+              export LD_LIBRARY_PATH="${m.pkgs.stdenv.cc.cc.lib}/lib:${m.pkgs.zlib}/lib:${m.pkgs.glib.out}/lib"
+              export PATH="${m.agent-venv}/bin:$PATH"
+
+              if [ ! -d "vendor/ntc-templates" ]; then
+                echo "Cloning ntc-templates..."
+                git clone --depth 1 https://github.com/networktocode/ntc-templates.git vendor/ntc-templates
+              fi
+              export NET_TEXTFSM="$PWD/vendor/ntc-templates/ntc_templates/templates/"
+
+              mkdir -p docs/raw_pdfs docs/markdown_out docs/agent_chunks
+
+              echo "icx-monitor agent shell"
+              echo "  docs pipeline: python scripts/ingest_docs.py <pdf>"
+              echo "  textfsm refs:  \$NET_TEXTFSM"
+              echo "  vendor refs:   vendor/textfsm, vendor/ntc-templates"
             '';
           };
         }

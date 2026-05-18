@@ -1,6 +1,7 @@
 result*
 .direnv/
 .venv/
+.agent-venv/
 __pycache__/
 *.pyc
 .env
@@ -11,3 +12,7 @@ dist/
 *.log
 /_legacy/
 *.egg-info/
+docs/markdown_out/
+docs/agent_chunks/
+vendor/ntc-templates/
+vendor/textfsm/

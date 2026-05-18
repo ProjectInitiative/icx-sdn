@@ -1,0 +1,14 @@
+Value Filldown PORT ([\d/]+)
+Value DUAL_MODE (\d+)
+Value INLINE_POWER (inline power)
+Value SPEED_DUPLEX (\S+)
+Value DISABLED (disable)
+Value FLOW_CONTROL (.+)
+
+Start
+  ^interface\s+ethernet\s+${PORT}
+  ^\s+dual-mode\s+${DUAL_MODE} -> Record
+  ^\s+${INLINE_POWER} -> Record
+  ^\s+speed-duplex\s+${SPEED_DUPLEX} -> Record
+  ^\s*${DISABLED}\s*$$ -> Record
+  ^\s+flow-control\s+${FLOW_CONTROL} -> Record

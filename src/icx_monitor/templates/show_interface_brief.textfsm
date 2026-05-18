@@ -1,0 +1,15 @@
+Value PORT (\S+)
+Value LINK (\S+)
+Value STATE (\S+)
+Value DUPLEX (\S+)
+Value SPEED (\S+)
+Value TRUNK (\S+)
+Value TAG (\S+)
+Value PVID (\S+)
+Value PRI (\d+)
+Value MAC (\S+)
+Value NAME (.*)
+
+Start
+  ^Port\s+Link\s+State -> Next
+  ^${PORT}\s+${LINK}\s+${STATE}\s+${DUPLEX}\s+${SPEED}\s+${TRUNK}\s+${TAG}\s+${PVID}\s+${PRI}\s+${MAC}\s+${NAME} -> Record

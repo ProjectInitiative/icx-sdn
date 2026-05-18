@@ -1,0 +1,13 @@
+Value Filldown LAG_NAME (\S+)
+Value Filldown LAG_ID (\d+)
+Value LAG_PORTS (.+)
+Value LAG_PRIMARY_PORT ([\d/]+)
+Value LAG_TYPE (.+)
+Value LACP_KEY (\d+)
+
+Start
+  ^=== LAG "${LAG_NAME}" ID ${LAG_ID}
+  ^\s+Ports:\s+${LAG_PORTS} -> Record
+  ^\s+Primary Port:\s+${LAG_PRIMARY_PORT} -> Record
+  ^\s+Trunk Type:\s+${LAG_TYPE} -> Record
+  ^\s+LACP Key:\s+${LACP_KEY} -> Record

@@ -1,0 +1,6 @@
+Value VERSION (.+)
+Value HOSTNAME (\S+)
+
+Start
+  ^ver\s+${VERSION} -> Record
+  ^hostname\s+${HOSTNAME} -> Record

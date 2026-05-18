@@ -1,0 +1,16 @@
+Value LAG_NAME (\S+)
+Value LAG_ID (\d+)
+Value PORTS (.+)
+Value PRIMARY_PORT ([\d/]+)
+
+Start
+  ^lag\s+${LAG_NAME}\s+dynamic\s+id\s+${LAG_ID} -> Record
+  ^lag\s+${LAG_NAME}\s+dynamic\s+id\s+${LAG_ID} -> LagBody
+
+LagBody
+  ^\s+ports\s+${PORTS} -> LagBody
+  ^\s+primary-port\s+${PRIMARY_PORT} -> LagBody
+  ^! -> Start
+  ^end -> End
+
+End

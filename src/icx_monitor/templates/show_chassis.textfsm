@@ -1,0 +1,16 @@
+Value PS_ID (\d+)
+Value PS_TYPE (.+?)
+Value PS_STATUS (\S+)
+Value FAN_ID (\d+)
+Value FAN_STATUS (\S+)
+Value SENSOR_NAME (.+?)
+Value TEMP ([\d.]+)
+Value MAC_TYPE (.+?)
+Value MAC_ADDR (\S+)
+
+Start
+  ^Power\s+supply\s+${PS_ID}\s+\(${PS_TYPE}\)\s+present,\s+status\s+${PS_STATUS} -> Record
+  ^Fan\s+${FAN_ID}\s+${FAN_STATUS}, -> Record
+  ^${SENSOR_NAME}\s+Temperature\s+Readings: -> Continue
+  ^\s+Current\s+temperature\s+:\s+${TEMP}\s+deg-C -> Record
+  ^${MAC_TYPE}\s+MAC\s*:\s*${MAC_ADDR} -> Record

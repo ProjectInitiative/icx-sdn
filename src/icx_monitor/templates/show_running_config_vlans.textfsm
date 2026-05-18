@@ -1,0 +1,12 @@
+Value Filldown VLAN_ID (\d+)
+Value Filldown VLAN_NAME (.+?)
+Value TAGGED (.+)
+Value UNTAGGED (.+)
+Value ROUTER_INTERFACE (\d+)
+
+Start
+  ^vlan\s+${VLAN_ID}\s+name\s+${VLAN_NAME}\s+by\s+port
+  ^vlan\s+${VLAN_ID}\s+by\s+port
+  ^\s+tagged\s+${TAGGED} -> Record
+  ^\s+untagged\s+${UNTAGGED} -> Record
+  ^\s+router-interface\s+ve\s+${ROUTER_INTERFACE} -> Record

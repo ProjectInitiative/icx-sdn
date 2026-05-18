@@ -1,0 +1,9 @@
+Value PORT (\S+)
+Value IN_PACKETS (\d+)
+Value OUT_PACKETS (\d+)
+Value IN_ERRORS (\d+)
+Value OUT_ERRORS (\d+)
+
+Start
+  ^Port\s+In\s+Packets -> Next
+  ^${PORT}\s+${IN_PACKETS}\s+${OUT_PACKETS}\s+${IN_ERRORS}\s+${OUT_ERRORS} -> Record
