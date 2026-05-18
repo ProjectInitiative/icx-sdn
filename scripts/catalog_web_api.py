@@ -1,7 +1,4 @@
-"""Systematic catalog of every Brocade ICX web UI form endpoint.
-
-Probes every page, extracts all forms and fields, submits each with dummy
-values, and records what returns data vs what's a write action.
+"""Deep crawler — recursively discovers every page and form in the Brocade ICX web UI.
 
 Usage:
     nix develop -c python scripts/catalog_web_api.py
@@ -14,7 +11,7 @@ import base64
 import urllib.request
 import urllib.error
 import urllib.parse
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 BASE_URL = f"http://{os.environ.get('ICX_SWITCH_HOST', '172.16.1.15')}"
 USER = os.environ.get("ICX_SWITCH_USER", "admin")
@@ -22,8 +19,7 @@ PASS = os.getenv("ICX_WEB_PASSWORD")
 auth_header = "Basic " + base64.b64encode(f"{USER}:{PASS}".encode()).decode()
 
 
-def fetch(path, data=None):
-    url = urljoin(BASE_URL, path)
+def fetch(url, data=None):
     req = urllib.request.Request(url)
     req.add_header("Authorization", auth_header)
     if data:
@@ -40,201 +36,182 @@ def fetch(path, data=None):
             "text": resp.read().decode("utf-8", errors="replace"),
         }
     except urllib.error.HTTPError as e:
-        text = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        return {"ok": False, "status": e.code, "type": "", "text": text}
+        t = e.read().decode("utf-8", errors="replace") if e.fp else ""
+        return {"ok": False, "status": e.code, "type": "", "text": t}
     except Exception as e:
         return {"ok": False, "status": 0, "type": "", "text": str(e)}
 
 
-SITEMAP = [
-    "rsystem.htm", "device.htm", "memory.htm", "flash.htm",
-    "show.htm", "showARP.htm", "showmac.htm", "shlog.htm",
-    "shrmonethstat.htm", "shrmonethErrstat.htm", "shrmonethhist.htm",
-    "portstat.htm", "portcfg.htm", "portattb.htm", "portutil.htm",
-    "vlan.htm", "vShLag.htm",
-    "stpstat.htm", "stpcfg.htm", "rstpstat.htm", "rstpcfg.htm",
-    "stackPOEcfg.htm",
-    "stackdetails.htm", "stackmodules.htm", "stackneig.htm",
-    "stackperip.htm", "stackperitr.htm",
-    "stackportsstatus.htm", "stackportsstats.htm", "stackportsinterface.htm",
-    "stackresource.htm",
-    "bootsq.htm", "prefer.htm",
-    "ip.htm", "rip.htm",
-    "sst.htm", "qospf.htm",
-    "clear.htm", "tcfg.htm", "timg.htm", "tracert.htm",
-    "picture.htm",
-]
-
-KNOWN_POST_ROUTES = [
-    "/Forms/PortStatStackUnit",
-    "/Forms/PortCfgStackUnit",
-    "/Forms/StackVlan",
-    "/Forms/StackPortsStats",
-    "/Forms/StackPOECfg",
-    "/Forms/STPStatStackUnit",
-    "/Forms/STPCfgStackUnit",
-    "/Forms/rsystem",
-    "/Forms/StatClear",
-    "/Forms/clear",
-    "/Forms/bootsq",
-    "/Forms/ip",
-    "/Forms/prefer",
-    "/Forms/qos_profile",
-    "/Forms/resetconf",
-    "/Forms/tcfg",
-    "/Forms/timg",
-    "/Forms/tracert",
-    "/Forms/static",
-    "/Forms/CfgStackGeneral",
-    "/Forms/CfgStackModule",
-    "/Forms/CfgStackPorts",
-    "/Forms/CfgStackUnitPri",
-]
+def is_html(r):
+    return r["ok"] and ("html" in r["type"] or not r["type"])
 
 
-def extract_form_fields(html, page_url):
+def links_in(html, base):
+    seen = set()
+    for m in re.finditer(r'(?:href|src)=["\']([^"\']+)["\']', html, re.I):
+        href = m.group(1).split("?")[0].split("#")[0]
+        if href and not href.startswith("telnet"):
+            full = urljoin(base, href)
+            seen.add(full)
+    return sorted(seen)
+
+
+def forms_in(html, page_url):
     forms = []
-    for fm in re.finditer(
-        r'<form[^>]*action="([^"]*)"[^>]*>(.*?)</form>', html, re.DOTALL | re.I
-    ):
-        action = fm.group(1) or page_url
+    for fm in re.finditer(r'<form[^>]*action="([^"]*)"[^>]*>(.*?)</form>', html, re.DOTALL | re.I):
+        action = urljoin(page_url, fm.group(1)) if fm.group(1) else page_url
         body = fm.group(2)
-
         fields = []
-        for inp in re.finditer(
-            r'<input[^>]+name="([^"]*)"[^>]*>', body, re.I
-        ):
-            name = inp.group(1)
-            i_type = (re.search(r'type="([^"]*)"', inp.group(0), re.I) or "").group(1) if re.search(r'type="([^"]*)"', inp.group(0), re.I) else "text"
-            value = (re.search(r'value="([^"]*)"', inp.group(0), re.I) or "").group(1) if re.search(r'value="([^"]*)"', inp.group(0), re.I) else ""
-            fields.append({"name": name, "type": i_type, "value": value})
-
-        for sel in re.finditer(
-            r'<select[^>]+name="([^"]*)"[^>]*>(.*?)</select>', body, re.DOTALL | re.I
-        ):
-            name = sel.group(1)
-            options = re.findall(r'<option[^>]*value="([^"]*)"[^>]*>', sel.group(2), re.I)
-            selected = re.findall(r'<option[^>]*selected[^>]*>([^<]+)', sel.group(2), re.I)
+        for inp in re.finditer(r'<input[^>]+name="([^"]*)"[^>]*>', body, re.I):
+            m = inp.group(0)
             fields.append({
-                "name": name,
-                "type": "select",
-                "options": options,
-                "default": options[0] if options else "",
+                "name": inp.group(1),
+                "type": re.search(r'type="([^"]*)"', m, re.I).group(1) if re.search(r'type="([^"]*)"', m, re.I) else "text",
+                "value": re.search(r'value="([^"]*)"', m, re.I).group(1) if re.search(r'value="([^"]*)"', m, re.I) else "",
             })
-
-        forms.append({"action": action, "fields": fields})
+        for sel in re.finditer(r'<select[^>]+name="([^"]*)"[^>]*>(.*?)</select>', body, re.DOTALL | re.I):
+            opts = re.findall(r'<option[^>]*value="([^"]*)"[^>]*>', sel.group(2), re.I)
+            sel_opts = re.findall(r'<option[^>]*selected[^>]*>([^<]+)', sel.group(2), re.I)
+            fields.append({
+                "name": sel.group(1),
+                "type": "select",
+                "options": opts,
+                "default": opts[0] if opts else "",
+            })
+        forms.append({"action": action, "fields": fields, "page": page_url})
     return forms
 
 
-def probe_form_action(action, fields, page_url):
-    # Build test params with dummy values
+def make_dummy_params(fields):
     params = {}
     for f in fields:
-        v = f.get("default") or f.get("value") or ""
         if f["type"] == "submit":
             continue
         if f["name"]:
+            v = f.get("default") or f.get("value") or ""
             params[f["name"]] = v
     if not params:
         params = {"Submit": "Display"}
+    return params
 
-    r = fetch(action, params)
-    has_tables = bool(re.findall(r"<table[^>]*>", r["text"])) if r["ok"] else False
-    return {
-        "action": action,
-        "params": params,
+
+catalog = {}
+visited = set()
+POST_ATTEMPTED = set()
+CONTEXT = {}  # page -> parent nav section
+
+
+def crawl(url, depth=0, parent="root"):
+    if url in visited:
+        return
+    visited.add(url)
+
+    r = fetch(url)
+    if not is_html(r):
+        return
+
+    path = url.replace(BASE_URL, "")
+    CONTEXT[path] = parent
+    print(f"{'  ' * depth}{'[P]' if depth == 0 else '[L]'} {path} ({len(r['text'])}b)")
+
+    catalog[path] = {
+        "parent": parent,
         "status": r["status"],
-        "ok": r["ok"],
         "size": len(r["text"]),
-        "has_tables": has_tables,
-        "is_html": "html" in r["type"] or not r["type"],
+        "links": [],
+        "forms": [],
+        "post_results": [],
     }
+
+    # Extract and probe forms
+    forms = forms_in(r["text"], url)
+    catalog[path]["forms"] = forms
+    for form in forms:
+        action = form["action"]
+        action_path = action.replace(BASE_URL, "")
+        if action_path in POST_ATTEMPTED:
+            continue
+        POST_ATTEMPTED.add(action_path)
+
+        params = make_dummy_params(form["fields"])
+        pr = fetch(action, params)
+        catalog[path]["post_results"].append({
+            "action": action_path,
+            "params": params,
+            "status": pr["status"] if pr["ok"] else pr["status"],
+            "ok": pr["ok"],
+            "size": len(pr["text"]),
+            "has_tables": bool(re.findall(r"<table[^>]*>", pr.get("text", ""))),
+        })
+        tag = "DATA" if pr["ok"] and re.findall(r"<table[^>]*>", pr["text"]) else ("PAGE" if pr["ok"] else f"ERR{pr['status']}")
+        print(f"{'  ' * (depth + 1)}  POST {action_path:40s} -> {tag} ({len(pr.get('text',''))}b) params={params}")
+
+    # Follow links (only .htm pages, depth limited)
+    if depth < 4:
+        for link in links_in(r["text"], url):
+            lp = urlparse(link)
+            if not lp.path.endswith(".htm"):
+                continue
+            if lp.path in visited:
+                continue
+            # Skip images, binary, logout, telnet
+            if any(x in lp.path for x in ["Logout", "telnet", "Images/", "logout"]):
+                continue
+            crawl(link, depth + 1, path)
 
 
 def main():
-    catalog = {}
+    print("=== Deep Brocade ICX Web UI Crawl ===\n")
 
-    # Phase 1: GET all pages, extract forms and links
-    print("=== Phase 1: Crawling pages ===\n")
-    for page in SITEMAP:
-        r = fetch(page)
-        if not r["ok"]:
-            continue
-        forms = extract_form_fields(r["text"], page)
-        catalog[page] = {
-            "method": "GET",
-            "status": r["status"],
-            "size": len(r["text"]),
-            "forms": forms,
-        }
+    # Start from nav menu
+    crawl(urljoin(BASE_URL, "/index.htm"), 0, "nav")
 
-    # Phase 2: Probe each form action
-    print("=== Phase 2: Probing form actions ===\n")
-    probed = set()
-    for page, entry in sorted(catalog.items()):
-        for form in entry.get("forms", []):
-            action = form["action"]
-            action_key = action.split("?")[0]
-            if action_key in probed:
-                continue
-            probed.add(action_key)
-
-            result = probe_form_action(action, form["fields"], page)
-            if result["ok"]:
-                tag = "DATA" if result["has_tables"] else "PAGE"
-            else:
-                tag = f"ERR{result['status']}"
-            print(f"  {tag:6s} {result['status']:3d} {action_key:35s} params={result['params']}")
-            catalog[f"POST:{action_key}"] = result
-
-    # Phase 3: Try raw POST to known routes with minimal params
-    print("\n=== Phase 3: Testing raw POST routes ===\n")
-    formless_params = [{"common_stack_id": "1", "Submit": "Display"}, {"Submit": "Display"}]
-    for route in KNOWN_POST_ROUTES:
-        if route in probed:
-            continue
-        probed.add(route)
-        for params in formless_params:
-            r = fetch(route, params)
-            if r["ok"]:
-                has_tables = bool(re.findall(r"<table[^>]*>", r["text"]))
-                tag = "DATA" if has_tables else "PAGE"
-                print(f"  {tag:6s} {r['status']:3d} {route:35s} params={params}")
-                catalog[f"POST:{route}"] = {
-                    "action": route, "params": params, "status": r["status"],
-                    "ok": True, "size": len(r["text"]), "has_tables": has_tables,
-                }
-                break
-            else:
-                if params == formless_params[-1]:
-                    print(f"  FAIL    {r['status']:3d} {route:35s} (no params worked)")
+    # Separately crawl Home if not visited
+    if urljoin(BASE_URL, "/Home") not in visited:
+        crawl(urljoin(BASE_URL, "/Home"), 0, "root")
 
     # Summary
-    print(f"\n=== Catalog Summary ===\n")
-    data_endpoints = [(k, v) for k, v in catalog.items()
-                      if v.get("has_tables") and v.get("ok")]
-    action_endpoints = [(k, v) for k, v in catalog.items()
-                        if "POST:" in k and v.get("ok") and not v.get("has_tables")]
-    failed = [(k, v) for k, v in catalog.items()
-              if not v.get("ok")]
+    pages = [p for p in catalog if "Forms" not in p]
+    post_endpoints = set()
+    for p, entry in catalog.items():
+        for pr in entry.get("post_results", []):
+            post_endpoints.add((pr["action"], pr["status"], pr["ok"], pr["has_tables"]))
 
-    print(f"Data endpoints (return HTML tables): {len(data_endpoints)}")
-    for k, v in sorted(data_endpoints):
-        sz = v.get("size", 0)
-        params = v.get("params", {})
-        print(f"  GET  {k:35s} ({sz} bytes, params={params})")
+    data_eps = [e for e in post_endpoints if e[3]]
+    page_eps = [e for e in post_endpoints if e[2] and not e[3]]
+    fail_eps = [e for e in post_endpoints if not e[2]]
 
-    print(f"\nAction endpoints (POST, no data table): {len(action_endpoints)}")
-    for k, v in sorted(action_endpoints):
-        print(f"  POST {k:35s} status={v['status']}")
+    print(f"\n=== Summary ===")
+    print(f"Pages discovered: {len(pages)}")
+    print(f"POST endpoints found: {len(post_endpoints)}")
+    print(f"  DATA (returns tables): {len(data_eps)}")
+    for e in sorted(data_eps):
+        print(f"    {e[0]}")
+    print(f"  PAGE (config forms): {len(page_eps)}")
+    for e in sorted(page_eps):
+        print(f"    {e[0]}")
+    print(f"  FAILED: {len(fail_eps)}")
 
-    print(f"\nFailed endpoints: {len(failed)}")
-    for k, v in sorted(failed):
-        print(f"  {k:35s} status={v['status']}")
+    # Print page tree
+    print(f"\n=== Page Tree ===")
+    by_parent = {}
+    for p, entry in catalog.items():
+        by_parent.setdefault(entry["parent"], []).append(p)
+    
+    def print_tree(parent, indent=0):
+        for child in sorted(by_parent.get(parent, [])):
+            forms = len(catalog[child].get("forms", []))
+            posts = catalog[child].get("post_results", [])
+            data_count = sum(1 for p in posts if p["has_tables"])
+            print(f"{'  ' * indent}{child} ({forms} forms, {data_count} data endpoints)")
+            print_tree(child, indent + 1)
+    
+    print_tree("nav")
+    print_tree("root")
 
-    with open("web_api_catalog.json", "w") as f:
+    with open("web_api_catalog_deep.json", "w") as f:
         json.dump(catalog, f, indent=2)
-    print(f"\nFull catalog saved to web_api_catalog.json")
+    print(f"\nFull catalog saved to web_api_catalog_deep.json")
 
 
 if __name__ == "__main__":
