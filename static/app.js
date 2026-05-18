@@ -2,6 +2,7 @@ let data = null;
 let liveData = null;
 let selectedPort = null;
 let liveInterval = null;
+let dataInterval = null;
 let isFlipped = false;
 
 async function fetchData() {
@@ -9,7 +10,7 @@ async function fetchData() {
   data = await r.json();
   if (data.error) { showToast('No data yet. Run ingest first.'); return; }
   renderAll();
-  startLivePolling();
+  if (!liveInterval) startLivePolling();
 }
 
 async function fetchLive() {
@@ -478,3 +479,5 @@ function toggleFlip() {
 }
 
 fetchData();
+if (dataInterval) clearInterval(dataInterval);
+dataInterval = setInterval(fetchData, 30000);
