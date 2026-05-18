@@ -24,6 +24,13 @@ Packages like PyTorch, Marker-PDF, netmiko, and textfsm are resolved via
 uv2nix from `uv.lock` — no pip in shellHook. It also clones `ntc-templates`
 into `vendor/` for TextFSM template reference.
 
+> **Note:** NVIDIA CUDA wheels ship prebuilt `.so` files that link against each
+> other and optional HPC libraries (RDMA, MPI, etc.) — these are impossible to
+> build hermeticly in Nix's sandbox. The agent shell therefore installs torch
+> and marker-pdf via `uv pip install` into a `.agent-venv` (using `uv.lock`
+> for version-pinned reproducibility). The main switch-monitor dev shell
+> (`nix develop`) remains fully Nix-hermetic.
+
 ## Available Commands
 
 | Command | Description |

@@ -1,0 +1,214 @@
+---
+# ------------------------------------------------------------------
+# VLANS
+# ------------------------------------------------------------------
+vlans:
+  mgmt:
+    vid: 10
+    description: "Management plane"
+    acls_in: [homelab_policy]
+  servers:
+    vid: 20
+    description: "Server/storage backplane"
+    acls_in: [homelab_policy]
+  home:
+    vid: 30
+    description: "Trusted home LAN"
+    acls_in: [homelab_policy]
+  guest:
+    vid: 40
+    description: "Guest wireless"
+    acls_in: [homelab_policy]
+  iot:
+    vid: 50
+    description: "IoT devices"
+    acls_in: [homelab_policy]
+
+# ------------------------------------------------------------------
+# ACLS
+# ------------------------------------------------------------------
+acls:
+  homelab_policy:
+    # --- PHASE 1: IDENTITY OVERRIDES ---
+    - rule:
+        description: "Kyle's Laptop full access by MAC"
+        eth_src: "74:8e:01:55:63:12"
+        actions:
+          allow: 1
+
+    - rule:
+        description: "Home Assistant bridge"
+        eth_type: 0x0800
+        ipv4_src: "192.168.30.50"
+        actions:
+          allow: 1
+
+    # --- PHASE 2: TARGETED PINHOLES ---
+    - rule:
+        description: "Guest to Chromecast"
+        eth_type: 0x0800
+        ipv4_src: "192.168.40.0/24"
+        ipv4_dst: "192.168.30.99"
+        actions:
+          allow: 1
+
+    - rule:
+        description: "Guest DNS/DHCP to core"
+        eth_type: 0x0800
+        ipv4_src: "192.168.40.0/24"
+        ipv4_dst: "172.16.1.1/32"
+        actions:
+          allow: 1
+
+    - rule:
+        description: "Guest NTP to core"
+        eth_type: 0x0800
+        ipv4_src: "192.168.40.0/24"
+        ipv4_dst: "172.16.1.1/32"
+        actions:
+          allow: 1
+
+    # --- PHASE 3: TRUSTED MESH ---
+    - rule:
+        description: "Management & Servers full mesh"
+        eth_type: 0x0800
+        ipv4_src: "172.16.0.0/20"
+        ipv4_dst: "172.16.0.0/20"
+        actions:
+          allow: 1
+
+    - rule:
+        description: "Home to Management & Servers"
+        eth_type: 0x0800
+        ipv4_src: "192.168.30.0/24"
+        ipv4_dst: "172.16.0.0/20"
+        actions:
+          allow: 1
+
+    - rule:
+        description: "Management & Servers to Home"
+        eth_type: 0x0800
+        ipv4_src: "172.16.0.0/20"
+        ipv4_dst: "192.168.30.0/24"
+        actions:
+          allow: 1
+
+    # --- PHASE 4: ISOLATION DROPS ---
+    - rule:
+        description: "Drop IoT to all private subnets"
+        eth_type: 0x0800
+        ipv4_src: "192.168.50.0/24"
+        ipv4_dst: "10.0.0.0/8"
+        actions:
+          allow: 0
+
+    - rule:
+        description: "Drop IoT to home LAN"
+        eth_type: 0x0800
+        ipv4_src: "192.168.50.0/24"
+        ipv4_dst: "192.168.30.0/24"
+        actions:
+          allow: 0
+
+    - rule:
+        description: "Drop IoT to management/servers"
+        eth_type: 0x0800
+        ipv4_src: "192.168.50.0/24"
+        ipv4_dst: "172.16.0.0/12"
+        actions:
+          allow: 0
+
+    - rule:
+        description: "Drop Guest to remaining LAN"
+        eth_type: 0x0800
+        ipv4_src: "192.168.40.0/24"
+        ipv4_dst: "192.168.30.0/24"
+        actions:
+          allow: 0
+
+    - rule:
+        description: "Drop Guest to management/servers"
+        eth_type: 0x0800
+        ipv4_src: "192.168.40.0/24"
+        ipv4_dst: "172.16.0.0/12"
+        actions:
+          allow: 0
+
+    # --- PHASE 5: CATCH-ALL ---
+    - rule:
+        description: "Default deny all cross-VLAN"
+        actions:
+          allow: 0
+
+# ------------------------------------------------------------------
+# DATAPATHS
+# ------------------------------------------------------------------
+dps:
+  # --- BROCADE ICX 6610 (beefcake) ---
+  beefcake:
+    dp_id: 0x0000000000000001
+    hardware: "Brocade ICX6610"
+    # Faucet OF port mapping on ICX 6610 (verify after enabling OpenFlow):
+    #   1/1/1  → OF port 1
+    #   1/1/48 → OF port 48
+    #   1/2/1  → OF port 49
+    #   1/2/10 → OF port 58
+    #   1/3/1  → OF port 61
+    #   1/3/8  → OF port 68
+    interfaces:
+      # --- LACP TRUNK TO BEEFLET (MikroTik) ---
+      # Update OF port numbers after enabling OpenFlow
+      53:
+        name: "to_beeflet_a"
+        lacp: 1
+        tagged_vlans: [mgmt, servers, home, guest, iot]
+      58:
+        name: "to_beeflet_b"
+        lacp: 1
+        tagged_vlans: [mgmt, servers, home, guest, iot]
+
+      # --- UPLINK TO ROUTER (capstan-gw) ---
+      # Port 1/3/1 → OF port 61
+      61:
+        name: "router_uplink"
+        tagged_vlans: [mgmt, servers, home, guest, iot]
+
+      # --- CLIENT PORTS (fill in as needed) ---
+      # Example: port 1/1/1 → OF port 1
+      1:
+        name: "wired_desktop"
+        native_vlan: home
+
+  # --- MIKROTIK (beeflet) ---
+  beeflet:
+    dp_id: 0x0000000000000002
+    hardware: "MikroTik CRS"
+    # MikroTik OF port mapping:
+    #   Verify with: /interface openflow print
+    interfaces:
+      # --- LACP TRUNK TO BEEFCAKE ---
+      1:
+        name: "to_beefcake_a"
+        lacp: 1
+        tagged_vlans: [mgmt, servers, home, guest, iot]
+      2:
+        name: "to_beefcake_b"
+        lacp: 1
+        tagged_vlans: [mgmt, servers, home, guest, iot]
+
+# ------------------------------------------------------------------
+# NOTES
+# ------------------------------------------------------------------
+# Routing:
+#   Faucet only does L2 forwarding + ACLs. Inter-VLAN routing must
+#   be handled by a separate router (capstan-gw) connected via the
+#   router_uplink port with an SVI/subinterface on each VLAN.
+#
+# To verify OF port numbers on beefcake:
+#   enable openflow
+#   controller tcp <faucet-ip> 6653
+#   Then on Faucet host:  faucet.log shows port labels, or use
+#   sudo ovs-ofctl dump-ports-desc tcp:127.0.0.1:6654
+#
+# To verify OF port numbers on beeflet (MikroTik):
+#   /interface openflow print
