@@ -76,6 +76,7 @@ function renderAll() {
   renderRj45Ports();
   renderQsqfPorts();
   renderLags();
+  renderVlans();
 }
 
 function renderSystemChips(chassis) {
@@ -303,6 +304,39 @@ function renderLags() {
       portsDiv.appendChild(chip);
     }
     card.appendChild(portsDiv);
+    section.appendChild(card);
+  }
+}
+
+function renderVlans() {
+  const section = document.getElementById('vlan-section');
+  section.innerHTML = '';
+
+  const vlans = data.config?.vlans;
+  if (!vlans || Object.keys(vlans).length === 0) {
+    section.innerHTML = '<div class="vlan-card" style="color:var(--text-dim)">No VLANs configured</div>';
+    return;
+  }
+
+  for (const v of Object.values(vlans)) {
+    const card = document.createElement('div');
+    card.className = 'vlan-card';
+
+    const header = document.createElement('div');
+    header.className = 'vlan-header';
+    header.innerHTML = `<span class="vlan-id">VLAN ${v.id}</span> <span class="vlan-name">${v.name || ''}</span>`;
+    card.appendChild(header);
+
+    const counts = document.createElement('div');
+    counts.className = 'vlan-counts';
+    const tagged = (v.tagged || []).length;
+    const untagged = (v.untagged || []).length;
+    counts.innerHTML = `
+      <span class="vlan-count vlan-count-t">${tagged} tagged</span>
+      <span class="vlan-count vlan-count-u">${untagged} untagged</span>
+    `;
+    card.appendChild(counts);
+
     section.appendChild(card);
   }
 }
