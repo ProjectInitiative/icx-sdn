@@ -62,7 +62,6 @@
           );
 
           venv = pythonSet.mkVirtualEnv "icx-env" workspace.deps.default;
-          agent-venv = pythonSet.mkVirtualEnv "agent-env" workspace.deps.optionals;
 
           inherit ((pkgs.callPackage pyproject-nix.build.util { })) mkApplication;
 
@@ -144,7 +143,6 @@
             pkgs
             lib
             venv
-            agent-venv
             pkg
             docker
             ops
@@ -227,6 +225,7 @@
               UV_PYTHON_DOWNLOADS = "never";
             };
             shellHook = ''
+              set -a; source .env 2>/dev/null || true; set +a
               unset PYTHONPATH
               export ICX_MONITOR_ROOT="$PWD"
               export PATH="${m.venv}/bin:$PATH"
@@ -240,15 +239,30 @@
 
           agent = m.pkgs.mkShell {
             packages = with m.pkgs; [
-              m.agent-venv
+              uv
+              python3
               git
               stdenv.cc.cc.lib
               zlib
               glib
             ];
             shellHook = ''
+              set -a; source .env 2>/dev/null || true; set +a
               export LD_LIBRARY_PATH="${m.pkgs.stdenv.cc.cc.lib}/lib:${m.pkgs.zlib}/lib:${m.pkgs.glib.out}/lib"
-              export PATH="${m.agent-venv}/bin:$PATH"
+
+              if [ ! -d ".agent-venv" ]; then
+                echo "Creating agent virtual environment..."
+                python -m venv .agent-venv
+              fi
+
+              source .agent-venv/bin/activate
+
+              if ! uv pip show marker-pdf > /dev/null 2>&1; then
+                echo "Installing agent deps via uv (from uv.lock)..."
+                uv pip install --quiet --reinstall \
+                  torch torchvision \
+                  marker-pdf netmiko textfsm
+              fi
 
               if [ ! -d "vendor/ntc-templates" ]; then
                 echo "Cloning ntc-templates..."
