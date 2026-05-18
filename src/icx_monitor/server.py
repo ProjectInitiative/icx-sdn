@@ -1,3 +1,9 @@
+"""Web UI server with live data from the Brocade ICX web API.
+
+No file-based polling — every /api/data request fetches fresh data
+directly from the switch via HTTP.
+"""
+
 import http.server
 import json
 import os
@@ -8,10 +14,10 @@ import threading
 from pathlib import Path
 
 from . import _project_root
+from .web_api import ICXWebClient
 
 PROJECT_ROOT = _project_root()
 DATA_DIR = PROJECT_ROOT / "data"
-DATA_FILE = DATA_DIR / "latest.json"
 LIVE_FILE = DATA_DIR / "live.json"
 STATIC_DIR = PROJECT_ROOT / "static"
 COMMUNITY_FILE = DATA_DIR / "snmp_community.txt"
@@ -28,12 +34,15 @@ class SwitchHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            if DATA_FILE.exists():
-                with open(DATA_FILE) as f:
-                    self.wfile.write(f.read().encode())
-            else:
+            try:
+                api = ICXWebClient()
+                data = api.get_full_data()
+                self.wfile.write(json.dumps(data).encode())
+            except Exception as e:
                 self.wfile.write(
-                    json.dumps({"error": "No data — run ingest first"}).encode()
+                    json.dumps(
+                        {"error": f"Live fetch failed: {e}", "detail": str(e)}
+                    ).encode()
                 )
             return
 
@@ -58,23 +67,13 @@ class SwitchHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             try:
-                result = subprocess.run(
-                    [sys.executable, "-m", "icx_monitor.ingest"],
-                    cwd=PROJECT_ROOT,
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                )
-                out = {
-                    "success": result.returncode == 0,
-                    "output": result.stdout,
-                    "error": result.stderr,
-                }
-            except subprocess.TimeoutExpired:
-                out = {"success": False, "error": "Ingest timed out"}
+                api = ICXWebClient()
+                data = api.get_full_data()
+                self.wfile.write(json.dumps({"success": True, "data": data}).encode())
             except Exception as e:
-                out = {"success": False, "error": str(e)}
-            self.wfile.write(json.dumps(out).encode())
+                self.wfile.write(
+                    json.dumps({"success": False, "error": str(e)}).encode()
+                )
             return
 
         return super().do_GET()
@@ -120,8 +119,8 @@ def serve():
 
     server = http.server.HTTPServer(("0.0.0.0", PORT), SwitchHandler)
     print(f"Serving at http://0.0.0.0:{PORT}")
-    print(f"  API: http://localhost:{PORT}/api/data")
-    print(f"  API: http://localhost:{PORT}/api/live")
+    print(f"  API: http://localhost:{PORT}/api/data  (live from switch)")
+    print(f"  API: http://localhost:{PORT}/api/live  (SNMP poller)")
     print(f"  API: http://localhost:{PORT}/api/ingest")
     print(f"  UI:  http://localhost:{PORT}/")
 

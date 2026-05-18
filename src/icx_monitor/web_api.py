@@ -21,6 +21,8 @@ import urllib.error
 import urllib.parse
 from html.parser import HTMLParser
 from urllib.parse import urljoin
+from datetime import datetime
+import subprocess
 
 
 class TableParser(HTMLParser):
@@ -95,8 +97,10 @@ def table_to_dicts(table):
     max_cells = max(len(r) for r in table)
     for i, row in enumerate(table):
         first = re.sub(r"<[^>]+>", "", (row or [""])[0]).strip()
-        is_header_repeat = any(first == re.sub(r"<[^>]+>", "", c).strip()
-                               for c in (table[0] if table else []))
+        is_header_repeat = any(
+            first == re.sub(r"<[^>]+>", "", c).strip()
+            for c in (table[0] if table else [])
+        )
         if len(row) >= max_cells - 1 and not is_header_repeat and i > 0:
             header_idx = i - 1
             break
@@ -105,7 +109,7 @@ def table_to_dicts(table):
     raw = table[header_idx]
     headers = [re.sub(r"<[^>]+>", "", c).strip() for c in raw]
     result = []
-    for row in table[header_idx + 1:]:
+    for row in table[header_idx + 1 :]:
         first = re.sub(r"<[^>]+>", "", (row or [""])[0]).strip()
         # Skip rows that look like headers
         if any(first == h for h in headers if h and len(h) > 2):
@@ -126,7 +130,11 @@ class ICXWebClient:
     def __init__(self, host=None, user=None, password=None):
         self.base = f"http://{host or os.environ.get('ICX_SWITCH_HOST', '172.16.1.15')}"
         user = user or os.environ.get("ICX_SWITCH_USER", "admin")
-        password = password or os.getenv("ICX_WEB_PASSWORD") or os.getenv("ICX_SSH_PASSWORD", "")
+        password = (
+            password
+            or os.getenv("ICX_WEB_PASSWORD")
+            or os.getenv("ICX_SSH_PASSWORD", "")
+        )
         self.auth = "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
 
     def _req(self, path, data=None):
@@ -182,10 +190,14 @@ class ICXWebClient:
         return self._dicts("/Forms/StatClear", {"Submit": "Display"})
 
     def get_port_config(self, stack_id="1"):
-        return self._dicts("/Forms/PortCfgStackUnit", {"common_stack_id": str(stack_id)})
+        return self._dicts(
+            "/Forms/PortCfgStackUnit", {"common_stack_id": str(stack_id)}
+        )
 
     def get_port_attributes(self, stack_id="1"):
-        return self._dicts("/Forms/PortAttbStackUnit", {"common_stack_id": str(stack_id)})
+        return self._dicts(
+            "/Forms/PortAttbStackUnit", {"common_stack_id": str(stack_id)}
+        )
 
     def get_port_utilization(self):
         return self._dicts("/Forms/UtilClear", {"Submit": "Display"})
@@ -213,7 +225,9 @@ class ICXWebClient:
     # ── STP ───────────────────────────────────────────────────
 
     def get_stp_status(self, stack_id="1"):
-        return self._dicts("/Forms/STPStatStackUnit", {"common_stack_id": str(stack_id)})
+        return self._dicts(
+            "/Forms/STPStatStackUnit", {"common_stack_id": str(stack_id)}
+        )
 
     def get_stp_config(self, stack_id="1"):
         return self._dicts("/Forms/STPCfgStackUnit", {"common_stack_id": str(stack_id)})
@@ -292,7 +306,9 @@ class ICXWebClient:
     # ── RMON ──────────────────────────────────────────────────
 
     def get_rmon_statistics(self, stack_id="1"):
-        return self._dicts("/Forms/ShRMonEthStatStackUnit", {"common_stack_id": str(stack_id)})
+        return self._dicts(
+            "/Forms/ShRMonEthStatStackUnit", {"common_stack_id": str(stack_id)}
+        )
 
     # ── Other ─────────────────────────────────────────────────
 
@@ -305,61 +321,203 @@ class ICXWebClient:
     def get_web_preferences(self):
         return self._dicts("/Forms/prefer")
 
-    # ── Bulk ──────────────────────────────────────────────────
+    # ── Full data (parser.py compatible output) ───────────────
 
-    def get_all(self):
-        methods = [
-            ("system_info", self.get_system_info),
-            ("device", self.get_device),
-            ("memory", self.get_memory),
-            ("flash", self.get_flash),
-            ("port_statistics", self.get_port_statistics),
-            ("port_config", self.get_port_config),
-            ("port_attributes", self.get_port_attributes),
-            ("port_utilization", self.get_port_utilization),
-            ("vlans", self.get_vlans),
-            ("arp", self.get_arp_table),
-            ("mac", self.get_mac_table),
-            ("stp_status", self.get_stp_status),
-            ("stp_config", self.get_stp_config),
-            ("poe", self.get_poe_config),
-            ("stack_details", self.get_stack_details),
-            ("stack_modules", self.get_stack_modules),
-            ("stack_neighbors", self.get_stack_neighbors),
-            ("stack_ports_stats", self.get_stack_ports_stats),
-            ("stack_ports_status", self.get_stack_ports_status),
-            ("stack_ports_interface", self.get_stack_ports_interface),
-            ("stack_resource", self.get_stack_resource),
-            ("dns", self.get_dns_config),
-            ("ip_config", self.get_ip_config),
-            ("udp_helper", self.get_udp_helper),
-            ("static_arp", self.get_static_arp),
-            ("static_rarp", self.get_static_rarp),
-            ("ip_prefix_lists", self.get_ip_prefix_lists),
-            ("ip_access_filters", self.get_ip_access_filters),
-            ("ip_community_filters", self.get_ip_community_filters),
-            ("qos_profiles", self.get_qos_profiles),
-            ("qos_mapping", self.get_qos_mapping),
-            ("boot_sequence", self.get_boot_sequence),
-            ("tftp_config", self.get_tftp_config),
-            ("web_preferences", self.get_web_preferences),
-            ("system_log", self.get_system_log),
+    def get_full_data(self):
+        """Fetch everything, matching the parser.py output schema."""
+        data = {}
+        device_html = self._req("/device.htm")
+
+        # Version
+        m = re.search(
+            r"Running Image Version.*?Version\s*<[^>]*>\s*([\w.]+)", device_html
+        )
+        version = m.group(1) if m else ""
+
+        # Hostname via SNMP
+        hostname = ""
+        try:
+            host = os.environ.get("ICX_SWITCH_HOST", "172.16.1.15")
+            c = (
+                open(
+                    os.environ.get("ICX_MONITOR_ROOT", ".") + "/data/snmp_community.txt"
+                )
+                .read()
+                .strip()
+            )
+            r = subprocess.run(
+                [
+                    "snmpget",
+                    "-v2c",
+                    "-c",
+                    c,
+                    host,
+                    "1.3.6.1.2.1.1.5.0",
+                    "-Oqv",
+                    "-t",
+                    "3",
+                    "-r",
+                    "1",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if r.returncode == 0:
+                hostname = r.stdout.strip().strip('"')
+        except Exception:
+            pass
+
+        data["config"] = {
+            "version": version,
+            "hostname": hostname,
+            "vlans": {},
+            "interfaces": {},
+            "lags": [],
+            "global": {},
+        }
+
+        # Chassis
+        chassis = {"power_supplies": [], "fans": [], "temperatures": {}, "macs": {}}
+        for m in re.finditer(
+            r"Power supply (\d+) \((.*?)\) present, status (\S+)", device_html
+        ):
+            chassis["power_supplies"].append(
+                {"id": int(m.group(1)), "type": m.group(2), "status": m.group(3)}
+            )
+        for m in re.finditer(r"Fan (\d+) (\S+), speed", device_html):
+            chassis["fans"].append({"id": int(m.group(1)), "status": m.group(2)})
+        for m in re.finditer(r"[Tt]emperature:\s*<[^>]*>\s*([\d.]+)\s*C", device_html):
+            chassis["temperatures"]["chassis"] = float(m.group(1))
+        data["chassis"] = chassis
+
+        # Port statistics
+        stats = {}
+        for row in self.get_port_statistics():
+            port = row.get("col0", row.get("Port", "")).strip()
+            if port.startswith("1/") or port == "mgmt1":
+                try:
+                    stats[port] = {
+                        "in_packets": int(row.get("Rx", 0)),
+                        "out_packets": int(row.get("Tx", 0)),
+                        "in_errors": int(row.get("Align", 0)) + int(row.get("FCS", 0)),
+                        "out_errors": int(row.get("Giant", 0))
+                        + int(row.get("Short", 0)),
+                    }
+                except (ValueError, TypeError):
+                    pass
+        data["statistics"] = stats
+
+        # Interface brief (port attributes)
+        port_attrib = self._dicts("/Forms/PortAttbStackUnit", {"common_stack_id": "1"})
+        interfaces = {}
+        for row in port_attrib:
+            port = row.get("Port", "").replace(":", "").strip()
+            if port.startswith("1/") or port == "mgmt1":
+                interfaces[port] = {
+                    "port": port,
+                    "link": "Up" if row.get("State") == "Forward" else "Down",
+                    "state": row.get("State", ""),
+                    "duplex": "",
+                    "speed": "",
+                    "trunk": None,
+                    "tag": row.get("Tag", row.get("VLAN", "")),
+                    "pvid": None,
+                    "priority": "",
+                    "mac": row.get("MAC Address", ""),
+                    "name": "",
+                }
+        data["interfaces"] = interfaces
+
+        # MACs from first port
+        if port_attrib:
+            m = port_attrib[0].get("MAC Address", "").replace("-", "").replace(":", "")
+            if len(m) == 12:
+                fm = ":".join(m[i : i + 2] for i in range(0, 12, 2))
+                chassis["macs"]["boot_prom"] = fm
+                chassis["macs"]["management"] = fm
+
+        # Port config (speed, PoE, trunk)
+        port_cfg = table_to_dicts(
+            parse_tables(
+                self._req("/Forms/PortCfgStackUnit", {"common_stack_id": "1"})
+            )[0]
+        )
+        for row in port_cfg:
+            port = row.get("Port", "").strip()
+            if not port.startswith("1/"):
+                continue
+            if port not in data["config"]["interfaces"]:
+                data["config"]["interfaces"][port] = {
+                    "port": port,
+                    "dual_mode": None,
+                    "inline_power": False,
+                    "speed_duplex": None,
+                    "disabled": False,
+                    "flow_control": None,
+                }
+            cfg = data["config"]["interfaces"][port]
+            actual = row.get("Actualspeed/mode", "")
+            if actual:
+                cfg["speed_duplex"] = actual
+            cfg["inline_power"] = (
+                row.get("Inline Power", row.get("col15", "")).strip() == "Enabled"
+            )
+            fc = row.get("FlowCtrl", "").strip()
+            if fc:
+                cfg["flow_control"] = fc
+            trunk = row.get("Trunk", "").strip()
+            if trunk and trunk not in ("None", ""):
+                if port in interfaces:
+                    interfaces[port]["trunk"] = trunk
+
+        # LAGs
+        lag_html = self._req("/vShLag.htm")
+        lag_names = set()
+        for m in re.finditer(r'name="lag_name"[^>]*>\s*(\S+)', lag_html):
+            lag_names.add(m.group(1))
+        data["config"]["lags"] = [
+            {"name": n, "id": i + 1} for i, n in enumerate(sorted(lag_names))
         ]
-        result = {}
-        for name, fn in methods:
-            try:
-                result[name] = fn()
-            except Exception as e:
-                result[name] = {"error": str(e)}
-        return result
+        data["lags"] = [
+            {
+                "name": n,
+                "id": i + 1,
+                "ports": [],
+                "primary_port": None,
+                "type": None,
+                "lacp_key": None,
+                "partner": {},
+            }
+            for i, n in enumerate(sorted(lag_names))
+        ]
+        data["lag_details"] = data["lags"]
+
+        # Merge config into interfaces
+        for pid, port in interfaces.items():
+            cfg = data["config"]["interfaces"].get(pid, {})
+            port["inline_power"] = cfg.get("inline_power", False)
+            port["dual_mode"] = cfg.get("dual_mode")
+            port["speed_duplex"] = cfg.get("speed_duplex")
+            port["disabled"] = cfg.get("disabled", False)
+            port["flow_control"] = cfg.get("flow_control")
+            if pid in stats:
+                port["stats"] = stats[pid]
+            port["vlans"] = []
+
+        data["_meta"] = {"parsed_at": datetime.now().isoformat(), "source": "web_api"}
+        return data
 
 
 def main():
     import sys
+
     api = ICXWebClient()
     if len(sys.argv) > 1 and sys.argv[1] == "--all":
         data = api.get_all()
-        summary = {k: (len(v) if isinstance(v, list) else "(dict)") for k, v in data.items()}
+        summary = {
+            k: (len(v) if isinstance(v, list) else "(dict)") for k, v in data.items()
+        }
         print(json.dumps(summary, indent=2))
         return
     if len(sys.argv) > 1:
@@ -370,15 +528,21 @@ def main():
             print(json.dumps(result, indent=2))
         else:
             print(f"Available: --all, or one of:")
-            for k in sorted([k.removeprefix("get_") for k in dir(api) if k.startswith("get_")]):
+            for k in sorted(
+                [k.removeprefix("get_") for k in dir(api) if k.startswith("get_")]
+            ):
                 print(f"  {k}")
         return
     print(f"=== ICX Web API Demo ===")
     s = api.get_system_info()
     print(f"System: {json.dumps(s, indent=2)}")
-    for name, fn in [("port_stats", api.get_port_statistics), ("vlans", api.get_vlans),
-                     ("arp", api.get_arp_table), ("mac", api.get_mac_table),
-                     ("poe", api.get_poe_config)]:
+    for name, fn in [
+        ("port_stats", api.get_port_statistics),
+        ("vlans", api.get_vlans),
+        ("arp", api.get_arp_table),
+        ("mac", api.get_mac_table),
+        ("poe", api.get_poe_config),
+    ]:
         r = fn()
         print(f"{name}: {len(r)} records" + (f"  e.g. {r[0]}" if r else ""))
 
